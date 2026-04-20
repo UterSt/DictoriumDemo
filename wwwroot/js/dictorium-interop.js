@@ -117,9 +117,11 @@ window.DictoriumInterop = (() => {
      * Encodes as "key1\x01val1\x01key2\x01val2\x01..." for the C wrapper.
      * Returns integer handle or -1 on error.
      */
-    function phCreate(pairs) {
-        // pairs: [{k: string, v: string}, ...]
-        const flat = pairs.map(p => `${p.k}\x01${p.v}`).join('\x01') + '\x01';
+    // flat: plain string "key1\x01val1\x01key2\x01val2\x01..." built on the C# side.
+    // Previously received an object array and called .map() — but Blazor JSInterop
+    // serializes C# arrays as JSON objects (not JS Arrays), so .map() threw.
+    // Accepting a pre-built string avoids all serialization edge cases.
+    function phCreate(flat) {
         return withStr(flat, fp => mod._ph_create(fp));
     }
 

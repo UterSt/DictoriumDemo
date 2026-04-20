@@ -114,8 +114,14 @@ public class DictoriumJsService(IJSRuntime js)
     /// Returns handle ID, or -1 on error.
     /// </summary>
     public async Task<int> PhCreateAsync(List<DictItem> pairs)
-        => await js.InvokeAsync<int>("DictoriumInterop.phCreate",
-            pairs.Select(p => new { k = p.Key, v = p.Value }).ToArray());
+    {
+        // Build the flat string on the C# side to avoid JS array serialization issues.
+        // Blazor JSInterop serializes C# arrays as JSON objects, not JS Arrays,
+        // so pairs.map() would fail. Passing a plain string is always safe.
+        // Format: "key1val1key2val2..."
+        var flat = string.Join("", pairs.SelectMany(p => new[] { p.Key, p.Value })) + "";
+        return await js.InvokeAsync<int>("DictoriumInterop.phCreate", flat);
+    }
 
     public async Task PhFreeAsync(int handle)
         => await js.InvokeVoidAsync("DictoriumInterop.phFree", handle);
