@@ -16,4 +16,23 @@
     <ServiceWorker Include="wwwroot\service-worker.js" PublishedContent="wwwroot\service-worker.published.js" />
   </ItemGroup>
 
+  <!--
+    Exclude dictorium.wasm from Blazor's static asset compression pipeline.
+    Blazor publish compresses static assets with Brotli/gzip, but our custom
+    WASM file is already optimised by Emscripten. Excluding it prevents the
+    build from treating it as a Blazor framework file and avoids potential
+    integrity hash mismatches in service-worker-assets.js.
+  -->
+  <ItemGroup>
+    <Content Update="wwwroot\js\dictorium.wasm">
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Update="wwwroot\js\dictorium.js">
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Update="wwwroot\js\dictorium-interop.js">
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

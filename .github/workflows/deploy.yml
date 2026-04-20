@@ -28,6 +28,33 @@ jobs:
       - name: Publish
         run: dotnet publish -c Release -o publish
 
+      # ── GitHub Pages fixes ────────────────────────────────────────────────
+
+      # 1. Fix base href: GitHub Pages serves the site at /REPO_NAME/, not /.
+      #    Blazor uses <base href> to resolve all _framework/, css/, js/ paths.
+      #    Without this fix every resource returns 404.
+      - name: Fix base href
+        run: |
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          echo "Setting base href to /$REPO_NAME/"
+          sed -i "s|<base href=\"/\" />|<base href=\"/$REPO_NAME/\" />|g" publish/wwwroot/index.html
+
+      # 2. Create 404.html — GitHub Pages serves this for any unknown path.
+      #    A copy of index.html lets Blazor's client-side router take over,
+      #    making direct links to /demo/linear, /structure/avl-tree etc work.
+      - name: Create 404.html for SPA routing
+        run: cp publish/wwwroot/index.html publish/wwwroot/404.html
+
+      # 3. Create .nojekyll — CRITICAL for Blazor.
+      #    Jekyll (GitHub Pages default processor) silently drops all directories
+      #    whose name starts with underscore. The Blazor runtime lives in
+      #    _framework/ — without .nojekyll, blazor.webassembly.js returns 404
+      #    and the app never starts.
+      - name: Create .nojekyll
+        run: touch publish/wwwroot/.nojekyll
+
+      # ── Upload & Deploy ───────────────────────────────────────────────────
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
