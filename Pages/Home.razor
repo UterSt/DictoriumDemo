@@ -1,0 +1,164 @@
+@page "/"
+@inject DataStructureService DS
+@inject NavigationManager Nav
+
+<PageTitle>Dictorium Demo — Структуры данных</PageTitle>
+
+<div class="home-wrap">
+
+    <div class="hero-box">
+        <div class="hero-badge">v0.1 &nbsp;&middot;&nbsp; Каркас &nbsp;&middot;&nbsp; Библиотека подключается позже</div>
+        <h1 class="hero-title">Алгоритмы Dictorium</h1>
+        <p class="hero-subtitle">
+            Интерактивная демонстрация структур данных библиотеки.<br />
+            Выберите категорию или сравните несколько алгоритмов.
+        </p>
+        <div class="hero-stats">
+            @foreach (var cat in _categories)
+            {
+                <div class="hero-stat">
+                    <span class="stat-num">@cat.Structures.Count</span>
+                    <span class="stat-label">@cat.NameRu</span>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="section-area">
+        <div class="section-title-row">
+            <h2 class="section-title">Категории</h2>
+            <a href="/compare" class="btn-classic">&#9776; Сравнить структуры</a>
+        </div>
+
+        <div class="category-grid">
+            @foreach (var cat in _categories)
+            {
+                <div class="category-card @(_selectedCategory == cat.Id ? "active" : "")"
+                     style="border-left-color: @cat.AccentColor"
+                     @onclick="() => SelectCategory(cat.Id)">
+                    <div class="card-top">
+                        <div class="card-icon">@cat.Icon</div>
+                        <div class="card-tag">@cat.Tag</div>
+                    </div>
+                    <h3 class="card-title">@cat.NameRu</h3>
+                    <p class="card-desc">@cat.Description</p>
+                    <div class="card-foot">
+                        <span>@cat.Structures.Count структур</span>
+                        <span>&#8594;</span>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (_selectedCategory.HasValue)
+    {
+        var cat = _categories.First(c => c.Id == _selectedCategory.Value);
+        <div class="section-area">
+            <div class="struct-list-header">
+                <span>@cat.Icon &nbsp; @cat.NameRu</span>
+                <button class="close-btn" @onclick="() => _selectedCategory = null">&#10005; Закрыть</button>
+            </div>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Название</th>
+                            <th>Поиск</th>
+                            <th>Вставка</th>
+                            <th>Память</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in cat.Structures)
+                        {
+                            <tr @onclick='() => Nav.NavigateTo($"/structure/{s.Slug}")'>
+                                <td class="tr-num" style="color: @cat.AccentColor">#@s.IssueNumber</td>
+                                <td class="tr-name-b">
+                                    <strong>@s.NameRu</strong>
+                                    <small>@s.Name</small>
+                                </td>
+                                <td class="tr-mono">@s.TimeComplexitySearch</td>
+                                <td class="tr-mono">@s.TimeComplexityInsert</td>
+                                <td class="tr-mono">@s.SpaceComplexity</td>
+                                <td class="tr-go">&#8594;</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    <div class="section-area" style="margin-top: 16px;">
+        <div class="section-title-row">
+            <h2 class="section-title">Все структуры</h2>
+            <div class="search-row">
+                <span class="search-label">Поиск:</span>
+                <input type="text"
+                       placeholder="Введите название..."
+                       @bind="_searchQuery"
+                       @bind:event="oninput"
+                       class="search-input" />
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Название</th>
+                        <th>Категория</th>
+                        <th>Поиск</th>
+                        <th>Вставка</th>
+                        <th>Память</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in _filteredStructures)
+                    {
+                        var cat = _categories.First(c => c.Id == s.Category);
+                        <tr @onclick='() => Nav.NavigateTo($"/structure/{s.Slug}")'>
+                            <td class="tr-num" style="color: @cat.AccentColor">#@s.IssueNumber</td>
+                            <td class="tr-name-b">
+                                <strong>@s.NameRu</strong>
+                                <small>@s.Name</small>
+                            </td>
+                            <td><span class="cat-pill">@cat.NameRu</span></td>
+                            <td class="tr-mono">@s.TimeComplexitySearch</td>
+                            <td class="tr-mono">@s.TimeComplexityInsert</td>
+                            <td class="tr-mono">@s.SpaceComplexity</td>
+                            <td class="tr-go">&#8594;</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+@code {
+    private List<DataStructureCategory> _categories = new();
+    private StructureCategory? _selectedCategory = null;
+    private string _searchQuery = "";
+
+    private IEnumerable<DataStructureInfo> _filteredStructures =>
+        DS.GetAllStructures().Where(s =>
+            string.IsNullOrEmpty(_searchQuery) ||
+            s.Name.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ||
+            s.NameRu.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase));
+
+    protected override void OnInitialized()
+    {
+        _categories = DS.GetAllCategories();
+    }
+
+    private void SelectCategory(StructureCategory id)
+    {
+        _selectedCategory = _selectedCategory == id ? null : id;
+    }
+}

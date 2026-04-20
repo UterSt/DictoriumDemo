@@ -1,0 +1,202 @@
+@page "/structure/{Slug}"
+@inject DataStructureService DS
+@inject NavigationManager Nav
+
+<PageTitle>@(_structure?.NameRu ?? "Структура") — Dictorium Demo</PageTitle>
+
+@if (_structure == null)
+{
+    <div class="not-found">
+        <span class="not-found-code">404</span>
+        <p>Структура не найдена.</p>
+        <p><a href="/">&#8592; На главную</a></p>
+    </div>
+}
+else
+{
+    var accent = _category?.AccentColor ?? "#002288";
+
+    <div class="page-wrap">
+
+        <div class="breadcrumb">
+            <a href="/">Обзор</a>
+            <span class="bc-sep">&#8250;</span>
+            <span style="color: @accent">@_category?.NameRu</span>
+            <span class="bc-sep">&#8250;</span>
+            <span class="bc-now">@_structure.NameRu</span>
+        </div>
+
+        <div class="struct-head-bar">
+            <div class="struct-issue-num" style="color: @accent">#@_structure.IssueNumber &nbsp;&mdash;&nbsp; @_category?.Tag</div>
+            <h1 class="struct-h1">@_structure.NameRu</h1>
+            <div class="struct-en">@_structure.Name</div>
+            <p class="struct-description">@_structure.Description</p>
+            <div class="struct-tags">
+                <span class="s-tag">@_category?.Tag</span>
+                <span class="s-tag">@_structure.TimeComplexitySearch search</span>
+            </div>
+        </div>
+
+        <div class="cx-box" style="margin-bottom: 14px;">
+            <div class="cx-box-title">Сложность операций</div>
+            <table class="cx-table">
+                <thead>
+                    <tr>
+                        <th>Поиск</th>
+                        <th>Вставка</th>
+                        <th>Удаление</th>
+                        <th>Память</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>@_structure.TimeComplexitySearch</td>
+                        <td>@_structure.TimeComplexityInsert</td>
+                        <td>@_structure.TimeComplexityDelete</td>
+                        <td>@_structure.SpaceComplexity</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="struct-body">
+
+            <div class="struct-main">
+
+                <div class="viz-section">
+                    <div class="viz-section-head">
+                        <span class="viz-section-title">Визуализация</span>
+                        <span>
+                            <button class="op-btn" disabled>&#9654; Запустить</button>
+                            &nbsp;
+                            <button class="op-btn" disabled>&#8634; Сброс</button>
+                        </span>
+                    </div>
+                    <div class="viz-canvas">
+                        <div class="viz-ph-icon" style="color: @accent">@_category?.Icon</div>
+                        <div class="viz-ph-name">@_structure.NameRu</div>
+                        <div class="viz-ph-text">
+                            Визуализация будет доступна после подключения<br />
+                            библиотеки <strong>Dictorium</strong>
+                        </div>
+                        <div class="viz-ph-tag">&#128230; Dictorium &middot; @_structure.Name</div>
+                    </div>
+                </div>
+
+                <div class="op-panel">
+                    <div class="op-panel-head">Операции</div>
+                    <div class="op-row">
+                        <input class="op-input" placeholder="Ключ..." disabled />
+                        <input class="op-input" placeholder="Значение..." disabled />
+                    </div>
+                    <div class="op-btns">
+                        <button class="op-btn" disabled>&#128269; Поиск</button>
+                        <button class="op-btn" disabled>+ Вставить</button>
+                        <button class="op-btn" disabled>&#10005; Удалить</button>
+                    </div>
+                    <div class="op-log">
+                        <div class="log-head">Лог операций</div>
+                        <div class="log-empty">Операции появятся здесь после подключения библиотеки...</div>
+                    </div>
+                </div>
+
+            </div>
+
+            <aside class="struct-side">
+
+                <div class="side-card">
+                    <div class="side-card-title">&#43; Достоинства</div>
+                    <div class="side-card-body">
+                        <ul class="sc-list pros">
+                            @foreach (var pro in _structure.Pros)
+                            {
+                                <li>@pro</li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="side-card">
+                    <div class="side-card-title">&#8722; Недостатки</div>
+                    <div class="side-card-body">
+                        <ul class="sc-list cons">
+                            @foreach (var con in _structure.Cons)
+                            {
+                                <li>@con</li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="side-card">
+                    <div class="side-card-title">&#9702; Применение</div>
+                    <div class="side-card-body">
+                        <ul class="sc-list use">
+                            @foreach (var uc in _structure.UseCases)
+                            {
+                                <li>@uc</li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="side-card">
+                    <div class="side-card-title">В категории «@_category?.NameRu»</div>
+                    <div>
+                        @foreach (var s in _siblings)
+                        {
+                            <a href="/structure/@s.Slug"
+                               class="sib-link @(s.Slug == Slug ? "current" : "")">
+                                <span class="sib-num" style="color: @accent">#@s.IssueNumber</span>
+                                <span>@s.NameRu</span>
+                            </a>
+                        }
+                    </div>
+                </div>
+
+                <a href="/compare?a=@Slug" class="btn-classic" style="display: block; text-align: center; padding: 6px;">
+                    &#9776; Сравнить с другой структурой
+                </a>
+
+            </aside>
+        </div>
+
+        <div class="struct-nav">
+            @if (_prev != null)
+            {
+                <a href="/structure/@_prev.Slug" class="snav-btn">&#8592; @_prev.NameRu</a>
+            }
+            else { <span></span> }
+
+            @if (_next != null)
+            {
+                <a href="/structure/@_next.Slug" class="snav-btn">@_next.NameRu &#8594;</a>
+            }
+        </div>
+
+    </div>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+
+    private DataStructureInfo? _structure;
+    private DataStructureCategory? _category;
+    private List<DataStructureInfo> _siblings = new();
+    private DataStructureInfo? _prev;
+    private DataStructureInfo? _next;
+
+    protected override void OnParametersSet()
+    {
+        _structure = DS.GetStructure(Slug);
+        _category = DS.GetCategoryForStructure(Slug);
+
+        if (_category != null)
+        {
+            _siblings = _category.Structures;
+            var idx = _siblings.FindIndex(s => s.Slug == Slug);
+            _prev = idx > 0 ? _siblings[idx - 1] : null;
+            _next = idx < _siblings.Count - 1 ? _siblings[idx + 1] : null;
+        }
+    }
+}

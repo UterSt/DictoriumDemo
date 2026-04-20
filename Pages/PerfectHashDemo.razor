@@ -1,0 +1,382 @@
+@page "/demo/perfecthash"
+@inject DictoriumJsService Dtr
+
+<PageTitle>PerfectHashDictionary — Демо — Dictorium</PageTitle>
+
+<div class="page-wrap">
+
+    <div class="breadcrumb">
+        <a href="/">Обзор</a>
+        <span class="bc-sep">›</span>
+        <a href="/structure/perfect-hashing">Абсолют O(1)</a>
+        <span class="bc-sep">›</span>
+        <span class="bc-now">PerfectHashDictionary [LIVE]</span>
+    </div>
+
+    <div class="struct-head-bar">
+        <div class="struct-issue-num" style="color:#cc6600">
+            #12 · dtr::PerfectHashDictionary&lt;string, string&gt; — реальная библиотека Dictorium через WASM
+        </div>
+        <h1 class="struct-h1">Совершенное хеширование</h1>
+        <div class="struct-en">PerfectHashDictionary.h · O(1) worst-case · двухуровневое хеширование FKS</div>
+        <p class="struct-description">
+            Статическая хэш-таблица без коллизий. Построение (Build) — <strong>O(n^1.5)</strong> один раз.
+            Поиск — строго <strong>O(1) / Ω(1)</strong>: ровно 2 вычисления хэша и 1 обращение к памяти.
+            Операции вызывают реальный <code>dtr::PerfectHashDictionary</code>, скомпилированный в WebAssembly.
+        </p>
+        <div class="struct-tags">
+            <span class="s-tag">ContainsKey O(1) worst</span>
+            <span class="s-tag">TryGetValidatedValue O(1)</span>
+            <span class="s-tag">Build O(n^1.5)</span>
+            <span class="s-tag">Коллизий: 0</span>
+            @if (_wasmReady)
+            {
+                <span class="s-tag" style="color:var(--acc-g);border-color:var(--acc-g)">● WASM готов</span>
+            }
+            else
+            {
+                <span class="s-tag" style="color:var(--acc-r)">○ Загрузка WASM...</span>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="demo-status @_statusCls">
+            <strong>@_statusIcon</strong>&nbsp; @_status
+        </div>
+    }
+
+    @if (!_wasmReady)
+    {
+        <div class="comp-hint">Загрузка WebAssembly модуля Dictorium...</div>
+    }
+    else
+    {
+        <div class="demo-layout">
+
+            <!-- Controls -->
+            <div class="demo-controls">
+
+                <!-- Build panel -->
+                <div class="ctrl-section">
+                    <div class="ctrl-section-title">Набор ключей (key=value, по одному на строку)</div>
+                    <textarea class="ph-textarea" @bind="_pairsInput" rows="7"
+                              placeholder="apple=яблоко&#10;banana=банан&#10;cherry=вишня"
+                              disabled="@_busy"></textarea>
+                    <button class="btn-op btn-build" @onclick="DoBuild"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_pairsInput))">
+                        ⚙ Построить — PerfectHashDictionary(pairs)
+                    </button>
+                </div>
+
+                @if (_handle >= 0)
+                {
+                    <!-- Search panel -->
+                    <div class="ctrl-section">
+                        <div class="ctrl-section-title">Поиск</div>
+                        <input class="search-input" style="width:100%;margin-bottom:6px;"
+                               @bind="_searchKey" @bind:event="oninput"
+                               placeholder="введите ключ"
+                               disabled="@_busy" />
+                        <button class="btn-op btn-search" @onclick="DoSearch"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_searchKey))">
+                            ▶ TryGetValidatedValue(key)
+                        </button>
+                        <button class="btn-op btn-search" @onclick="DoContains"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_searchKey))">
+                            ▶ ContainsKey(key)
+                        </button>
+                    </div>
+
+                    <!-- Stats -->
+                    <div class="ctrl-info">
+                        <div class="ctrl-info-row"><span>Count()</span><span class="ctrl-info-val">@_count</span></div>
+                        <div class="ctrl-info-row"><span>Хэш-вычислений</span><span class="ctrl-info-val">2</span></div>
+                        <div class="ctrl-info-row"><span>Обращений к памяти</span><span class="ctrl-info-val">1</span></div>
+                        <div class="ctrl-info-row"><span>Коллизий</span><span class="ctrl-info-val">0</span></div>
+                        <div class="ctrl-info-row"><span>Результат</span><span class="ctrl-info-val">@_result</span></div>
+                    </div>
+                }
+
+                <!-- Algorithm steps legend -->
+                <div class="ctrl-legend">
+                    <div class="legend-title">Шаги O(1) поиска</div>
+                    <div class="legend-row"><span class="ph-step-dot step1"></span> Хэш ключа</div>
+                    <div class="legend-row"><span class="ph-step-dot step2"></span> Уровень 1 — корзина</div>
+                    <div class="legend-row"><span class="ph-step-dot step3"></span> Уровень 2 — слот</div>
+                    <div class="legend-row"><span class="ph-step-dot step-ok"></span> Результат</div>
+                </div>
+            </div>
+
+            <!-- Right: visualisation -->
+            <div class="demo-main">
+
+                @if (_handle < 0)
+                {
+                    <div class="ph-empty-state">
+                        <div class="ph-empty-icon">◈</div>
+                        <div>Введите пары <code>key=value</code> и нажмите <strong>Построить</strong>.</div>
+                        <div style="font-size:11px;color:var(--text-3);margin-top:8px;line-height:1.6;">
+                            dtr::PerfectHashDictionary подберёт globalSeed и локальные seeds<br>
+                            для каждой корзины — гарантируя нулевые коллизии.
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <!-- Stored pairs grid -->
+                    <div class="viz-section">
+                        <div class="viz-section-head">
+                            <span class="viz-section-title">
+                                Хранимые пары — итерация через PerfectHashIterator
+                            </span>
+                            <span class="viz-section-info">@_items.Count пар · O(n) обход</span>
+                        </div>
+                        <div class="ph-pairs-grid">
+                            @for (int i = 0; i < _items.Count; i++)
+                            {
+                                var item = _items[i];
+                                bool hit = item.Key == _foundKey;
+                                string cls = hit ? "ph-pair-cell ph-pair-hit" : "ph-pair-cell";
+                                <div class="@cls">
+                                    <span class="ph-pair-key" title="@item.Key">@item.Key</span>
+                                    <span class="ph-pair-sep">→</span>
+                                    <span class="ph-pair-val" title="@item.Value">@item.Value</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Animated search trace -->
+                    @if (_steps.Count > 0)
+                    {
+                        <div class="ph-steps-panel">
+                            <div class="op-panel-head">
+                                Трасса O(1) поиска — @(_currentStep + 1)/@_steps.Count шагов
+                            </div>
+                            @foreach (var (step, si) in _steps.Select((s, i) => (s, i)))
+                            {
+                                string scls = si == _currentStep ? "ph-step ph-step-active"
+                                            : si <  _currentStep ? "ph-step ph-step-done"
+                                                                  : "ph-step ph-step-pending";
+                                <div class="@scls">
+                                    <span class="ph-step-num">@(si + 1)</span>
+                                    <span>@step</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+
+                <!-- Log -->
+                <div class="op-panel" style="margin-top:10px;">
+                    <div class="op-panel-head">Лог вызовов Dictorium</div>
+                    <div class="demo-log">
+                        @if (_log.Count == 0)
+                        {
+                            <div class="log-empty">// Постройте словарь и выполните поиск...</div>
+                        }
+                        @foreach (var (text, cls) in _log)
+                        {
+                            <div class="log-line @cls">@text</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool   _wasmReady;
+    private bool   _busy;
+    private int    _handle = -1;
+    private int    _count  = 0;
+
+    private string _pairsInput = "apple=яблоко\nbanana=банан\ncherry=вишня\ndate=финик\nelderberry=бузина\nfig=инжир";
+    private string _searchKey  = "";
+    private string _foundKey   = "";
+    private string _result     = "—";
+    private string _status     = "";
+    private string _statusCls  = "";
+    private string _statusIcon = "";
+
+    private List<DictItem> _items       = new();
+    private List<string>   _steps       = new();
+    private int            _currentStep = -1;
+
+    private readonly List<(string Text, string Cls)> _log = new();
+
+    private const int StepMs = 700;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Dtr.InitAsync();
+        _wasmReady = true;
+    }
+
+    // ── Operations ─────────────────────────────────────────────────────────────
+
+    private async Task DoBuild()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_pairsInput)) return;
+        _busy = true;
+        _steps.Clear(); _currentStep = -1; _foundKey = "";
+
+        var pairs = ParsePairInput(_pairsInput);
+        if (pairs.Count == 0)
+        {
+            SetStatus("Нет корректных строк вида key=value", "status-err", "✕");
+            _busy = false; return;
+        }
+
+        // Free previous instance if any
+        if (_handle >= 0) await Dtr.PhFreeAsync(_handle);
+
+        Log($"> PerfectHashDictionary(vector<pair> × {pairs.Count})", "log-op");
+        Log($"  Построение... O(n^1.5) — случайный подбор seeds...", "log-miss");
+
+        _handle = await Dtr.PhCreateAsync(pairs);
+
+        if (_handle < 0)
+        {
+            var err = await Dtr.LastErrorAsync();
+            Log($"  Ошибка: {err}", "log-err");
+            SetStatus($"Ошибка построения: {err}", "status-err", "✕");
+            _busy = false; return;
+        }
+
+        _count = await Dtr.PhCountAsync(_handle);
+        _items = await Dtr.PhSnapshotAsync(_handle);
+
+        Log($"  Построен: {_count} ключей, 0 коллизий", "log-ok");
+        Log($"  Все операции поиска теперь строго O(1) / Ω(1)", "log-ok");
+        SetStatus($"Построен: {_count} ключей · 0 коллизий · поиск: O(1) worst-case", "status-ok", "✓");
+
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoSearch()
+    {
+        if (_busy || _handle < 0 || string.IsNullOrWhiteSpace(_searchKey)) return;
+        _busy = true;
+        var key = _searchKey.Trim();
+        _foundKey = "";
+        Log($"> TryGetValidatedValue(\"{key}\")", "log-op");
+        await RunSearchAnimation(key, full: true);
+        _busy = false;
+    }
+
+    private async Task DoContains()
+    {
+        if (_busy || _handle < 0 || string.IsNullOrWhiteSpace(_searchKey)) return;
+        _busy = true;
+        var key = _searchKey.Trim();
+        _foundKey = "";
+        Log($"> ContainsKey(\"{key}\")", "log-op");
+        await RunSearchAnimation(key, full: false);
+        _busy = false;
+    }
+
+    // ── O(1) search animation (illustrative — the actual call still goes through WASM) ──
+
+    private async Task RunSearchAnimation(string key, bool full)
+    {
+        _steps = new List<string>
+        {
+            $"hash(\"{key}\") → raw_hash = std::hash<string>{{}}(\"{key}\")",
+            $"Уровень 1: bucket_idx = FastRange(raw_hash, globalSeed, bucket_count)",
+            $"Уровень 2: slot_idx = offset + FastRange(raw_hash, bucket_seed, bucket_size)",
+            "Проверка ключа: slot.Exists && slot.key == query_key"
+        };
+        _currentStep = -1;
+        StateHasChanged();
+        await Task.Delay(200);
+
+        // Step 1: hash
+        _currentStep = 0;
+        Log($"  [1] Вычисление hash(\"{key}\")", "log-miss");
+        StateHasChanged(); await Task.Delay(StepMs);
+
+        // Step 2: bucket
+        _currentStep = 1;
+        Log($"  [2] FastRange → bucket index (уровень 1)", "log-miss");
+        StateHasChanged(); await Task.Delay(StepMs);
+
+        // Step 3: slot
+        _currentStep = 2;
+        Log($"  [3] FastRange → flat slot index (уровень 2)", "log-miss");
+        StateHasChanged(); await Task.Delay(StepMs);
+
+        // Step 4: actual WASM call
+        _currentStep = 3;
+        string resultStr;
+        if (full)
+        {
+            var val = await Dtr.PhGetAsync(_handle, key);
+            bool found = !string.IsNullOrEmpty(val);
+            if (found)
+            {
+                _foundKey = key;
+                resultStr = $"true → \"{val}\"";
+                Log($"  [4] Найден: \"{key}\" → \"{val}\"  ✓", "log-ok");
+                SetStatus($"TryGetValidatedValue: \"{key}\" → \"{val}\" (2 хэша, 1 обращение к памяти)", "status-ok", "✓");
+            }
+            else
+            {
+                resultStr = "false (ключ не в исходном множестве)";
+                Log($"  [4] Не найден: \"{key}\" → false", "log-err");
+                SetStatus($"Ключ \"{key}\" не найден", "status-err", "✕");
+            }
+        }
+        else
+        {
+            bool found = await Dtr.PhContainsAsync(_handle, key);
+            if (found)
+            {
+                _foundKey = key;
+                resultStr = "true";
+                Log($"  [4] ContainsKey → true  ✓", "log-ok");
+                SetStatus($"ContainsKey(\"{key}\") = true", "status-ok", "✓");
+            }
+            else
+            {
+                resultStr = "false";
+                Log($"  [4] ContainsKey → false", "log-err");
+                SetStatus($"ContainsKey(\"{key}\") = false", "status-err", "✕");
+            }
+        }
+        _result = resultStr;
+        StateHasChanged(); await Task.Delay(StepMs);
+
+        await Task.Delay(400);
+        StateHasChanged();
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    private static List<DictItem> ParsePairInput(string input)
+    {
+        var result = new List<DictItem>();
+        foreach (var line in input.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var eq = line.IndexOf('=');
+            if (eq <= 0) continue;
+            var k = line[..eq].Trim();
+            var v = line[(eq + 1)..].Trim();
+            if (!string.IsNullOrEmpty(k) && !string.IsNullOrEmpty(v))
+                result.Add(new DictItem(k, v));
+        }
+        return result;
+    }
+
+    private void SetStatus(string msg, string cls, string icon)
+    { _status = msg; _statusCls = cls; _statusIcon = icon; }
+
+    private void Log(string text, string cls = "")
+    {
+        if (_log.Count > 120) _log.RemoveAt(0);
+        _log.Add((text, cls));
+    }
+}

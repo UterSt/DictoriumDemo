@@ -1,0 +1,455 @@
+@page "/demo/linear"
+@inject DictoriumJsService Dtr
+@inject NavigationManager Nav
+
+<PageTitle>LinearDictionary — Демо — Dictorium</PageTitle>
+
+<div class="page-wrap">
+
+    <div class="breadcrumb">
+        <a href="/">Обзор</a>
+        <span class="bc-sep">›</span>
+        <a href="/structure/open-hashing">Хэш-таблицы</a>
+        <span class="bc-sep">›</span>
+        <span class="bc-now">LinearDictionary [LIVE]</span>
+    </div>
+
+    <div class="struct-head-bar">
+        <div class="struct-issue-num" style="color:var(--acc-g)">
+            dtr::LinearDictionary&lt;string, string&gt; — реальная библиотека Dictorium через WASM
+        </div>
+        <h1 class="struct-h1">Линейный словарь</h1>
+        <div class="struct-en">LinearDictionary.h · O(n) поиск · базовый эталон</div>
+        <p class="struct-description">
+            Каждая операция выполняет <strong>линейный проход</strong> по вектору пар ключ-значение.
+            Нажмите операцию — анимация покажет, как алгоритм обходит ячейки одну за другой.
+            Все вызовы идут через <code>dtr::LinearDictionary</code> скомпилированную в WebAssembly.
+        </p>
+        <div class="struct-tags">
+            <span class="s-tag">ContainsKey O(n)</span>
+            <span class="s-tag">Add O(n)</span>
+            <span class="s-tag">Remove O(n)</span>
+            <span class="s-tag">Count O(1)</span>
+            @if (_wasmReady)
+            {
+                <span class="s-tag" style="color:var(--acc-g);border-color:var(--acc-g)">● WASM готов</span>
+            }
+            else
+            {
+                <span class="s-tag" style="color:var(--acc-r)">○ Загрузка WASM...</span>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="demo-status @_statusCls">
+            <strong>@_statusIcon</strong>&nbsp; @_status
+        </div>
+    }
+
+    @if (!_wasmReady)
+    {
+        <div class="comp-hint">Загрузка WebAssembly модуля Dictorium...</div>
+    }
+    else
+    {
+        <div class="demo-layout">
+
+            <!-- Controls -->
+            <div class="demo-controls">
+                <div class="ctrl-section">
+                    <div class="ctrl-section-title">Ключ (Key)</div>
+                    <input class="search-input" style="width:100%;"
+                           @bind="_keyInput" @bind:event="oninput"
+                           placeholder="apple"
+                           disabled="@_busy" />
+                    <div class="ctrl-section-title" style="margin-top:6px;">Значение (Value)</div>
+                    <input class="search-input" style="width:100%;margin-bottom:0;"
+                           @bind="_valInput" @bind:event="oninput"
+                           placeholder="яблоко"
+                           disabled="@_busy" />
+                </div>
+
+                <div class="ctrl-ops">
+                    <button class="btn-op btn-search" @onclick="DoContainsKey"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                        ▶ ContainsKey(key)
+                    </button>
+                    <button class="btn-op btn-search" @onclick="DoGet"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                        ▶ TryGetValue(key)
+                    </button>
+                    <button class="btn-op btn-add" @onclick="DoAdd"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                        + Add(key, value)
+                    </button>
+                    <button class="btn-op btn-add" @onclick="DoInsertOrAssign"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                        ± InsertOrAssign(key, value)
+                    </button>
+                    <button class="btn-op btn-remove" @onclick="DoRemove"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                        − Remove(key)
+                    </button>
+                    <button class="btn-op btn-clear" @onclick="DoClear" disabled="@_busy">
+                        ⊘ Clear()
+                    </button>
+                </div>
+
+                <div class="ctrl-info">
+                    <div class="ctrl-info-row">
+                        <span>Count()</span>
+                        <span class="ctrl-info-val">@_items.Count</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Шагов анимации</span>
+                        <span class="ctrl-info-val">@_steps</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Результат</span>
+                        <span class="ctrl-info-val">@_result</span>
+                    </div>
+                </div>
+
+                <div class="ctrl-legend">
+                    <div class="legend-title">Легенда</div>
+                    <div class="legend-row"><span class="legend-cell scanning"></span> Проверка</div>
+                    <div class="legend-row"><span class="legend-cell found"></span> Найден / добавлен</div>
+                    <div class="legend-row"><span class="legend-cell notfound"></span> Не совпадает / удалён</div>
+                </div>
+            </div>
+
+            <!-- Visualization -->
+            <div class="demo-main">
+
+                <div class="viz-section">
+                    <div class="viz-section-head">
+                        <span class="viz-section-title">
+                            _dict — vector&lt;pair&lt;string,string&gt;&gt;
+                        </span>
+                        <span class="viz-section-info">
+                            @_items.Count элем. &nbsp;·&nbsp; индексы 0..@(_items.Count - 1)
+                        </span>
+                    </div>
+
+                    <div class="lin-viz-wrap">
+                        @if (_items.Count == 0)
+                        {
+                            <div class="lin-empty">[ _dict пуст / empty ]</div>
+                        }
+                        else
+                        {
+                            <div class="lin-array">
+                                @for (int i = 0; i < _items.Count; i++)
+                                {
+                                    var item = _items[i];
+                                    var hi   = i;
+                                    string cls = hi == _hilite ? "lin-cell " + _hiliteCls : "lin-cell";
+                                    <div class="@cls">
+                                        @if (hi == _hilite && _hiliteCls == "scanning")
+                                        {
+                                            <div class="lin-scan-arrow">&#9660;</div>
+                                        }
+                                        <div class="lin-idx">[@hi]</div>
+                                        <div class="lin-key" title="@item.Key">@item.Key</div>
+                                        <div class="lin-sep">&#8594;</div>
+                                        <div class="lin-val" title="@item.Value">@item.Value</div>
+                                    </div>
+                                }
+                            </div>
+                            <div class="lin-ruler">
+                                @for (int i = 0; i < _items.Count; i++)
+                                {
+                                    <div class="lin-ruler-cell">@i</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Log -->
+                <div class="op-panel">
+                    <div class="op-panel-head">Лог вызовов Dictorium</div>
+                    <div class="demo-log">
+                        @if (_log.Count == 0)
+                        {
+                            <div class="log-empty">// Выберите операцию...</div>
+                        }
+                        @foreach (var (text, cls) in _log)
+                        {
+                            <div class="log-line @cls">@text</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private int    _handle = -1;
+    private bool   _wasmReady;
+    private bool   _busy;
+
+    private List<DictItem> _items   = new();
+    private int            _hilite  = -1;
+    private string         _hiliteCls = "";
+
+    private string _keyInput = "";
+    private string _valInput = "";
+    private string _status   = "";
+    private string _statusCls = "";
+    private string _statusIcon = "";
+    private int    _steps  = 0;
+    private string _result = "—";
+
+    private readonly List<(string Text, string Cls)> _log = new();
+
+    private const int StepMs = 380;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Dtr.InitAsync();
+        _handle    = await Dtr.LinearCreateAsync();
+        _wasmReady = true;
+
+        // Pre-load with examples via real Add() calls
+        await Dtr.LinearAddAsync(_handle, "apple",      "яблоко");
+        await Dtr.LinearAddAsync(_handle, "banana",     "банан");
+        await Dtr.LinearAddAsync(_handle, "cherry",     "вишня");
+        await Dtr.LinearAddAsync(_handle, "date",       "финик");
+        await Dtr.LinearAddAsync(_handle, "elderberry", "бузина");
+
+        _items = await Dtr.LinearSnapshotAsync(_handle);
+        Log("> // Словарь инициализирован (5 элементов через Add)", "log-ok");
+    }
+
+    // ── Operations ─────────────────────────────────────────────────────────────
+
+    private async Task DoContainsKey()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput)) return;
+        var key = _keyInput.Trim();
+        Log($"> ContainsKey(\"{key}\")", "log-op");
+        await AnimateScan(key, scanOnly: true);
+    }
+
+    private async Task DoGet()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput)) return;
+        var key = _keyInput.Trim();
+        Log($"> TryGetValue(\"{key}\", out val)", "log-op");
+        await AnimateScan(key, scanOnly: false);
+    }
+
+    private async Task DoAdd()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+        Log($"> Add(\"{key}\", \"{val}\")", "log-op");
+
+        // Animate ContainsKey check first (Add does this internally)
+        for (int i = 0; i < _items.Count; i++)
+        {
+            _hilite = i; _hiliteCls = "scanning"; StateHasChanged();
+            await Task.Delay(StepMs);
+            if (_items[i].Key == key)
+            {
+                Log($"  [{i}] \"{_items[i].Key}\" == \"{key}\" → ArgumentException (дубликат)", "log-err");
+                _hilite = i; _hiliteCls = "notfound"; StateHasChanged();
+                await Task.Delay(600);
+                SetStatus($"Ключ \"{key}\" уже существует — Add отклонён", "status-err", "✕");
+                _steps  = i + 1;
+                _result = "throw";
+                goto Done;
+            }
+            Log($"  [{i}] \"{_items[i].Key}\" ≠ \"{key}\"", "log-miss");
+        }
+
+        // Actually call dtr::LinearDictionary::Add via WASM
+        bool ok = await Dtr.LinearAddAsync(_handle, key, val);
+        if (ok)
+        {
+            _items = await Dtr.LinearSnapshotAsync(_handle);
+            _hilite = _items.Count - 1; _hiliteCls = "found"; StateHasChanged();
+            Log($"  emplace_back → [{_items.Count - 1}] \"{key}\" : \"{val}\"", "log-ok");
+            _steps  = _items.Count;
+            _result = "ok";
+            SetStatus($"Добавлен [{_items.Count - 1}]: \"{key}\" → \"{val}\"", "status-ok", "✓");
+            await Task.Delay(600);
+        }
+        else
+        {
+            Log($"  {await Dtr.LastErrorAsync()}", "log-err");
+        }
+
+        Done:
+        await Task.Delay(300);
+        Reset();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoInsertOrAssign()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+        Log($"> InsertOrAssign(\"{key}\", \"{val}\")", "log-op");
+
+        bool found = false;
+        for (int i = 0; i < _items.Count; i++)
+        {
+            _hilite = i; _hiliteCls = "scanning"; StateHasChanged();
+            await Task.Delay(StepMs);
+            if (_items[i].Key == key)
+            {
+                // Call actual InsertOrAssign via WASM
+                await Dtr.LinearInsertOrAssignAsync(_handle, key, val);
+                _items = await Dtr.LinearSnapshotAsync(_handle);
+                _hilite = i; _hiliteCls = "found"; StateHasChanged();
+                Log($"  [{i}] Найден → значение обновлено на \"{val}\"", "log-ok");
+                _steps = i + 1; _result = "updated";
+                SetStatus($"Обновлён [{i}]: \"{key}\" → \"{val}\"", "status-ok", "✓");
+                found = true;
+                await Task.Delay(600);
+                break;
+            }
+            Log($"  [{i}] \"{_items[i].Key}\" ≠ \"{key}\"", "log-miss");
+        }
+
+        if (!found)
+        {
+            await Dtr.LinearInsertOrAssignAsync(_handle, key, val);
+            _items = await Dtr.LinearSnapshotAsync(_handle);
+            _hilite = _items.Count - 1; _hiliteCls = "found"; StateHasChanged();
+            Log($"  emplace_back → [{_items.Count - 1}]", "log-ok");
+            _steps = _items.Count; _result = "inserted";
+            SetStatus($"Вставлен [{_items.Count - 1}]: \"{key}\" → \"{val}\"", "status-ok", "✓");
+            await Task.Delay(600);
+        }
+
+        await Task.Delay(300);
+        Reset(); _busy = false; StateHasChanged();
+    }
+
+    private async Task DoRemove()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+        Log($"> Remove(\"{key}\")", "log-op");
+
+        bool found = false;
+        for (int i = 0; i < _items.Count; i++)
+        {
+            _hilite = i; _hiliteCls = "scanning"; StateHasChanged();
+            await Task.Delay(StepMs);
+
+            if (_items[i].Key == key)
+            {
+                _hilite = i; _hiliteCls = "notfound"; StateHasChanged();
+                Log($"  [{i}] Найден → erase({i}) — сдвиг элементов влево", "log-ok");
+                await Task.Delay(600);
+                // Call actual Remove via WASM
+                await Dtr.LinearRemoveAsync(_handle, key);
+                _items = await Dtr.LinearSnapshotAsync(_handle);
+                _steps = i + 1; _result = "true";
+                SetStatus($"Удалён [{i}]: \"{key}\"", "status-ok", "✓");
+                found = true;
+                break;
+            }
+            Log($"  [{i}] \"{_items[i].Key}\" ≠ \"{key}\"", "log-miss");
+        }
+
+        if (!found)
+        {
+            Log($"  Ключ не найден → return false", "log-err");
+            _steps = _items.Count; _result = "false";
+            SetStatus($"Ключ \"{key}\" не найден", "status-err", "✕");
+        }
+
+        await Task.Delay(300);
+        Reset(); _busy = false; StateHasChanged();
+    }
+
+    private async Task DoClear()
+    {
+        if (_busy) return;
+        await Dtr.LinearClearAsync(_handle);
+        _items = new();
+        Log("> Clear() → _dict.clear()", "log-op");
+        _result = "void"; _steps = 0;
+        SetStatus("Словарь очищён", "status-ok", "✓");
+        StateHasChanged();
+    }
+
+    // ── Animation helper ───────────────────────────────────────────────────────
+
+    private async Task AnimateScan(string key, bool scanOnly)
+    {
+        _busy = true;
+        var snapshot = await Dtr.LinearSnapshotAsync(_handle);
+
+        int foundAt = -1;
+        for (int i = 0; i < snapshot.Count; i++)
+        {
+            _hilite = i; _hiliteCls = "scanning"; StateHasChanged();
+            await Task.Delay(StepMs);
+
+            if (snapshot[i].Key == key)
+            {
+                foundAt = i;
+                _hilite = i; _hiliteCls = "found"; StateHasChanged();
+
+                if (scanOnly)
+                {
+                    Log($"  [{i}] \"{snapshot[i].Key}\" == \"{key}\" → true", "log-ok");
+                    _result = "true";
+                    SetStatus($"ContainsKey: найден [{i}] \"{key}\"", "status-ok", "✓");
+                }
+                else
+                {
+                    // Actual call to confirm
+                    var val = await Dtr.LinearGetAsync(_handle, key);
+                    Log($"  [{i}] \"{snapshot[i].Key}\" == \"{key}\" → \"{val}\"", "log-ok");
+                    _result = $"\"{val}\"";
+                    SetStatus($"TryGetValue: [{i}] \"{key}\" → \"{val}\"", "status-ok", "✓");
+                }
+
+                await Task.Delay(700);
+                break;
+            }
+            Log($"  [{i}] \"{snapshot[i].Key}\" ≠ \"{key}\"", "log-miss");
+        }
+
+        _steps = foundAt >= 0 ? foundAt + 1 : snapshot.Count;
+
+        if (foundAt < 0)
+        {
+            Log($"  Ключ не найден — {snapshot.Count} сравнений → false", "log-err");
+            _result = "false";
+            SetStatus($"Ключ \"{key}\" не найден ({snapshot.Count} сравнений)", "status-err", "✕");
+        }
+
+        await Task.Delay(400);
+        Reset(); _busy = false; StateHasChanged();
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    private void Reset() { _hilite = -1; _hiliteCls = ""; }
+
+    private void SetStatus(string msg, string cls, string icon)
+    { _status = msg; _statusCls = cls; _statusIcon = icon; }
+
+    private void Log(string text, string cls = "")
+    {
+        if (_log.Count > 120) _log.RemoveAt(0);
+        _log.Add((text, cls));
+    }
+}

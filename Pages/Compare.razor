@@ -1,0 +1,223 @@
+@page "/compare"
+@inject DataStructureService DS
+@inject NavigationManager Nav
+
+<PageTitle>Сравнение структур — Dictorium Demo</PageTitle>
+
+<div class="compare-page-wrap">
+
+    <h1 class="compare-h1">Сравнение структур данных</h1>
+    <p class="compare-sub">Выберите до 3 структур для параллельного сравнения.</p>
+
+    <div class="selector-area">
+        @for (int i = 0; i < 3; i++)
+        {
+            int idx = i;
+            var selected = _selected[idx];
+
+            <div class="selector-slot">
+                <div class="slot-lbl">Структура @(idx + 1)</div>
+
+                @if (selected == null)
+                {
+                    <div class="slot-empty">— выберите из списка ниже —</div>
+                }
+                else
+                {
+                    var cat = DS.GetCategoryForStructure(selected.Slug);
+                    <div class="slot-filled">
+                        <span class="slot-cat-icon">@cat?.Icon</span>
+                        <div class="slot-info">
+                            <strong>@selected.NameRu</strong>
+                            <small>@cat?.NameRu</small>
+                        </div>
+                        <button class="slot-rm" @onclick="() => _selected[idx] = null">&#10005;</button>
+                    </div>
+                }
+
+                <div class="slot-drop">
+                    @foreach (var cat in DS.GetAllCategories())
+                    {
+                        <div class="dd-grp">
+                            <div class="dd-grp-lbl" style="color: @cat.AccentColor">@cat.Icon &nbsp;@cat.NameRu</div>
+                            @foreach (var s in cat.Structures)
+                            {
+                                bool alreadyPicked = _selected.Any(x => x?.Slug == s.Slug);
+                                <button class="dd-item @(selected?.Slug == s.Slug ? "selected" : "") @(alreadyPicked && selected?.Slug != s.Slug ? "disabled" : "")"
+                                        disabled="@(alreadyPicked && selected?.Slug != s.Slug)"
+                                        @onclick="() => Select(idx, s)">
+                                    <span class="dd-num" style="color: @cat.AccentColor">#@s.IssueNumber</span>
+                                    <span>@s.NameRu</span>
+                                    <span class="dd-en">@s.Name</span>
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    @{
+        var active = _selected.Where(s => s != null).Select(s => s!).ToList();
+    }
+
+    @if (active.Count >= 2)
+    {
+        <div class="table-wrap">
+            <table class="comp-table">
+                <thead>
+                    <tr>
+                        <th class="lbl-th">Параметр</th>
+                        @foreach (var s in active)
+                        {
+                            var cat = DS.GetCategoryForStructure(s.Slug);
+                            <th>
+                                <div class="ct-head-inner">
+                                    <span>@cat?.Icon</span>
+                                    <strong>@s.NameRu</strong>
+                                    <small>@s.Name</small>
+                                </div>
+                            </th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="section-tr">
+                        <td colspan="@(active.Count + 1)">Временная сложность</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl-td">&#128269; Поиск</td>
+                        @foreach (var s in active)
+                        {
+                            <td><span class="ct-mono">@s.TimeComplexitySearch</span></td>
+                        }
+                    </tr>
+                    <tr>
+                        <td class="lbl-td">&#43; Вставка</td>
+                        @foreach (var s in active)
+                        {
+                            <td><span class="ct-mono">@s.TimeComplexityInsert</span></td>
+                        }
+                    </tr>
+                    <tr>
+                        <td class="lbl-td">&#10005; Удаление</td>
+                        @foreach (var s in active)
+                        {
+                            <td><span class="ct-mono">@s.TimeComplexityDelete</span></td>
+                        }
+                    </tr>
+                    <tr>
+                        <td class="lbl-td">&#128190; Память</td>
+                        @foreach (var s in active)
+                        {
+                            <td><span class="ct-mono">@s.SpaceComplexity</span></td>
+                        }
+                    </tr>
+
+                    <tr class="section-tr">
+                        <td colspan="@(active.Count + 1)">Достоинства</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl-td">&#43; Плюсы</td>
+                        @foreach (var s in active)
+                        {
+                            <td>
+                                @foreach (var pro in s.Pros)
+                                {
+                                    <span class="ct-item pro">@pro</span>
+                                }
+                            </td>
+                        }
+                    </tr>
+
+                    <tr class="section-tr">
+                        <td colspan="@(active.Count + 1)">Недостатки</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl-td">&#8722; Минусы</td>
+                        @foreach (var s in active)
+                        {
+                            <td>
+                                @foreach (var con in s.Cons)
+                                {
+                                    <span class="ct-item con">@con</span>
+                                }
+                            </td>
+                        }
+                    </tr>
+
+                    <tr class="section-tr">
+                        <td colspan="@(active.Count + 1)">Применение</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl-td">&#9702; Использование</td>
+                        @foreach (var s in active)
+                        {
+                            <td>
+                                @foreach (var uc in s.UseCases)
+                                {
+                                    <span class="ct-item use">@uc</span>
+                                }
+                            </td>
+                        }
+                    </tr>
+
+                    <tr class="section-tr">
+                        <td colspan="@(active.Count + 1)">Визуализация</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl-td">Демо</td>
+                        @foreach (var s in active)
+                        {
+                            var cat = DS.GetCategoryForStructure(s.Slug);
+                            <td class="ct-viz-td">
+                                @cat?.Icon<br />
+                                Dictorium &middot; @s.Name
+                            </td>
+                        }
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="comp-links">
+            @foreach (var s in active)
+            {
+                var cat = DS.GetCategoryForStructure(s.Slug);
+                <a href="/structure/@s.Slug" class="comp-link">
+                    @cat?.Icon &nbsp;@s.NameRu &#8594;
+                </a>
+            }
+        </div>
+    }
+    else if (active.Count == 1)
+    {
+        <p class="comp-hint">Выберите ещё минимум одну структуру для сравнения.</p>
+    }
+    else
+    {
+        <p class="comp-hint">Выберите 2–3 структуры, чтобы начать сравнение.</p>
+    }
+
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "a")]
+    public string? PreloadA { get; set; }
+
+    private DataStructureInfo?[] _selected = new DataStructureInfo?[3];
+
+    protected override void OnInitialized()
+    {
+        if (!string.IsNullOrEmpty(PreloadA))
+        {
+            _selected[0] = DS.GetStructure(PreloadA);
+        }
+    }
+
+    private void Select(int slot, DataStructureInfo s)
+    {
+        _selected[slot] = _selected[slot]?.Slug == s.Slug ? null : s;
+    }
+}
