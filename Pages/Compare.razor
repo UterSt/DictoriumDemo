@@ -185,7 +185,7 @@
             @foreach (var s in active)
             {
                 var cat = DS.GetCategoryForStructure(s.Slug);
-                <a href="/structure/@s.Slug" class="comp-link">
+                <a href="structure/@s.Slug" class="comp-link">
                     @cat?.Icon &nbsp;@s.NameRu &#8594;
                 </a>
             }

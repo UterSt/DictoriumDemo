@@ -9,7 +9,7 @@
     <div class="not-found">
         <span class="not-found-code">404</span>
         <p>Структура не найдена.</p>
-        <p><a href="/">&#8592; На главную</a></p>
+        <p><a href="">&#8592; На главную</a></p>
     </div>
 }
 else
@@ -19,7 +19,7 @@ else
     <div class="page-wrap">
 
         <div class="breadcrumb">
-            <a href="/">Обзор</a>
+            <a href="">Обзор</a>
             <span class="bc-sep">&#8250;</span>
             <span style="color: @accent">@_category?.NameRu</span>
             <span class="bc-sep">&#8250;</span>
@@ -145,7 +145,7 @@ else
                     <div>
                         @foreach (var s in _siblings)
                         {
-                            <a href="/structure/@s.Slug"
+                            <a href="structure/@s.Slug"
                                class="sib-link @(s.Slug == Slug ? "current" : "")">
                                 <span class="sib-num" style="color: @accent">#@s.IssueNumber</span>
                                 <span>@s.NameRu</span>
@@ -154,7 +154,7 @@ else
                     </div>
                 </div>
 
-                <a href="/compare?a=@Slug" class="btn-classic" style="display: block; text-align: center; padding: 6px;">
+                <a href="compare?a=@Slug" class="btn-classic" style="display: block; text-align: center; padding: 6px;">
                     &#9776; Сравнить с другой структурой
                 </a>
 
@@ -164,13 +164,13 @@ else
         <div class="struct-nav">
             @if (_prev != null)
             {
-                <a href="/structure/@_prev.Slug" class="snav-btn">&#8592; @_prev.NameRu</a>
+                <a href="structure/@_prev.Slug" class="snav-btn">&#8592; @_prev.NameRu</a>
             }
             else { <span></span> }
 
             @if (_next != null)
             {
-                <a href="/structure/@_next.Slug" class="snav-btn">@_next.NameRu &#8594;</a>
+                <a href="structure/@_next.Slug" class="snav-btn">@_next.NameRu &#8594;</a>
             }
         </div>
 

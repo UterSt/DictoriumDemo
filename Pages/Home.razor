@@ -27,7 +27,7 @@
     <div class="section-area">
         <div class="section-title-row">
             <h2 class="section-title">Категории</h2>
-            <a href="/compare" class="btn-classic">&#9776; Сравнить структуры</a>
+            <a href="compare" class="btn-classic">&#9776; Сравнить структуры</a>
         </div>
 
         <div class="category-grid">
@@ -74,7 +74,7 @@
                     <tbody>
                         @foreach (var s in cat.Structures)
                         {
-                            <tr @onclick='() => Nav.NavigateTo($"/structure/{s.Slug}")'>
+                            <tr @onclick='() => Nav.NavigateTo($"structure/{s.Slug}")'>
                                 <td class="tr-num" style="color: @cat.AccentColor">#@s.IssueNumber</td>
                                 <td class="tr-name-b">
                                     <strong>@s.NameRu</strong>
@@ -121,7 +121,7 @@
                     @foreach (var s in _filteredStructures)
                     {
                         var cat = _categories.First(c => c.Id == s.Category);
-                        <tr @onclick='() => Nav.NavigateTo($"/structure/{s.Slug}")'>
+                        <tr @onclick='() => Nav.NavigateTo($"structure/{s.Slug}")'>
                             <td class="tr-num" style="color: @cat.AccentColor">#@s.IssueNumber</td>
                             <td class="tr-name-b">
                                 <strong>@s.NameRu</strong>
