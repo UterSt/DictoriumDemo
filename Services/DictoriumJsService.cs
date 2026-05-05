@@ -115,12 +115,11 @@ public class DictoriumJsService(IJSRuntime js)
     /// </summary>
     public async Task<int> PhCreateAsync(List<DictItem> pairs)
     {
-        // Build the flat string on the C# side to avoid JS array serialization issues.
-        // Blazor JSInterop serializes C# arrays as JSON objects, not JS Arrays,
-        // so pairs.map() would fail. Passing a plain string is always safe.
-        // Format: "key1val1key2val2..."
-        var flat = string.Join("", pairs.SelectMany(p => new[] { p.Key, p.Value })) + "";
-        return await js.InvokeAsync<int>("DictoriumInterop.phCreate", flat);
+        // C signature: void* ph_create(int count, const char* flat_keys, const char* flat_vals)
+        // Pass count + two string[] arrays; JS interop builds flat null-terminated buffers.
+        var keys = pairs.Select(p => p.Key).ToArray();
+        var vals = pairs.Select(p => p.Value).ToArray();
+        return await js.InvokeAsync<int>("DictoriumInterop.phCreate", pairs.Count, keys, vals);
     }
 
     public async Task PhFreeAsync(int handle)
@@ -155,16 +154,19 @@ public class DictoriumJsService(IJSRuntime js)
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Parses the WASM snapshot format: [["key1","val1"],["key2","val2"],...]
+    /// The C++ _build_snapshot() template emits an array of 2-element arrays —
+    /// NOT the old {"k":...,"v":...} object format.
+    /// </summary>
     private static List<DictItem> ParseSnapshot(string json)
     {
         if (string.IsNullOrEmpty(json) || json == "[]") return new();
         try
         {
-            var docs = JsonSerializer.Deserialize<JsonElement[]>(json)!;
-            return docs.Select(d => new DictItem(
-                d.GetProperty("k").GetString()!,
-                d.GetProperty("v").GetString()!
-            )).ToList();
+            // Each element is a 2-element string array: ["key", "value"]
+            var rows = JsonSerializer.Deserialize<string[][]>(json)!;
+            return rows.Select(r => new DictItem(r[0], r[1])).ToList();
         }
         catch { return new(); }
     }

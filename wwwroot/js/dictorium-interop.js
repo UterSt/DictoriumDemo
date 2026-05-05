@@ -4,18 +4,23 @@
  * Bridge between the Dictorium WebAssembly module and Blazor's JSInterop.
  * Loaded after dictorium.js in index.html.
  *
- * All functions are exposed under window.DictoriumInterop and called from
- * C# via IJSRuntime.InvokeAsync("DictoriumInterop.<method>", args...).
- *
  * String protocol:
- *   - To C:   allocate UTF-8 in WASM heap, pass pointer, free after call.
- *   - From C: static buffer — copy immediately via UTF8ToString.
+ *   - To C:   allocStr() → WASM heap, freed after call.
+ *   - From C (static):   readStr(ptr)      — UTF8ToString only, do NOT free.
+ *   - From C (malloc'd): readAndFree(ptr)  — UTF8ToString then _free(ptr).
+ *     malloc'd returns: linear_get, ph_get, *_snapshot.
+ *
+ * ph_create protocol:
+ *   C: void* ph_create(int count, const char* flat_keys, const char* flat_vals)
+ *   flat_keys/flat_vals = N consecutive null-terminated UTF-8 strings.
+ *   Built by allocFlatStrings(jsArray).
  */
 
 window.DictoriumInterop = (() => {
     let mod = null;
 
-    // ── String helpers ─────────────────────────────────────────────────────
+    // ── String helpers ──────────────────────────────────────────────────────
+
     function allocStr(s) {
         const bytes = mod.lengthBytesUTF8(s) + 1;
         const ptr   = mod._malloc(bytes);
@@ -23,8 +28,32 @@ window.DictoriumInterop = (() => {
         return ptr;
     }
 
+    // Builds flat null-terminated buffer "s1\0s2\0s3\0" for _parse_flat() in C.
+    function allocFlatStrings(arr) {
+        let totalBytes = 0;
+        for (const s of arr) totalBytes += mod.lengthBytesUTF8(s) + 1;
+        if (totalBytes === 0) totalBytes = 1;
+        const ptr = mod._malloc(totalBytes);
+        let offset = 0;
+        for (const s of arr) {
+            const len = mod.lengthBytesUTF8(s);
+            mod.stringToUTF8(s, ptr + offset, len + 1);
+            offset += len + 1;
+        }
+        return ptr;
+    }
+
+    // Static/non-owned WASM string — do NOT free (e.g. dtr_last_error).
     function readStr(ptr) {
-        return mod.UTF8ToString(ptr);
+        return ptr ? mod.UTF8ToString(ptr) : "";
+    }
+
+    // malloc'd WASM string — read then free immediately.
+    function readAndFree(ptr) {
+        if (!ptr) return "";
+        const s = mod.UTF8ToString(ptr);
+        mod._free(ptr);
+        return s;
     }
 
     function withStr(s, fn) {
@@ -40,114 +69,82 @@ window.DictoriumInterop = (() => {
         finally { mod._free(pa); mod._free(pb); }
     }
 
-    // ── Module initialisation ──────────────────────────────────────────────
+    // ── Module init ─────────────────────────────────────────────────────────
+
     async function init() {
         if (mod !== null) return;
         mod = await DictoriumModule();
     }
 
     function isReady() { return mod !== null; }
-
     function lastError() { return readStr(mod._dtr_last_error()); }
 
     // ══════════════════════════════════════════════════════════════════════
     //  LinearDictionary
     // ══════════════════════════════════════════════════════════════════════
 
-    function linearCreate() {
-        return mod._linear_create();
-    }
+    function linearCreate()    { return mod._linear_create(); }
+    function linearFree(h)     { mod._linear_free(h); }
+    function linearClear(h)    { mod._linear_clear(h); }
+    function linearCount(h)    { return mod._linear_count(h); }
 
-    function linearFree(h) {
-        mod._linear_free(h);
-    }
-
-    /** Returns true on success, false if key already exists. */
     function linearAdd(h, key, val) {
-        return withStr2(key, val, (kp, vp) =>
-            mod._linear_add(h, kp, vp) === 1
-        );
+        return withStr2(key, val, (kp, vp) => mod._linear_add(h, kp, vp) === 1);
     }
-
     function linearInsertOrAssign(h, key, val) {
-        withStr2(key, val, (kp, vp) =>
-            mod._linear_insert_or_assign(h, kp, vp)
-        );
+        return withStr2(key, val, (kp, vp) => mod._linear_insert_or_assign(h, kp, vp) === 1);
     }
-
-    /** Returns true / false. */
     function linearContains(h, key) {
-        return withStr(key, kp =>
-            mod._linear_contains(h, kp) === 1
-        );
+        return withStr(key, kp => mod._linear_contains(h, kp) === 1);
     }
-
-    /** Returns value string or "" if not found. */
+    // C returns malloc'd char* — must readAndFree.
     function linearGet(h, key) {
-        return withStr(key, kp =>
-            readStr(mod._linear_get(h, kp))
-        );
+        return withStr(key, kp => readAndFree(mod._linear_get(h, kp)));
     }
-
-    /** Returns true if key was present and removed. */
     function linearRemove(h, key) {
-        return withStr(key, kp =>
-            mod._linear_remove(h, kp) === 1
-        );
+        return withStr(key, kp => mod._linear_remove(h, kp) === 1);
     }
-
-    function linearClear(h)  { mod._linear_clear(h); }
-    function linearCount(h)  { return mod._linear_count(h); }
-
-    /**
-     * Returns a JSON array snapshot of the internal _dict vector.
-     * Used to update the visualisation after each operation.
-     * Parsed on the C# side via System.Text.Json.
-     */
+    // Snapshot returns malloc'd JSON [["k","v"],...] — must readAndFree.
     function linearSnapshot(h) {
-        return readStr(mod._linear_snapshot(h));
+        return readAndFree(mod._linear_snapshot(h));
     }
 
     // ══════════════════════════════════════════════════════════════════════
     //  PerfectHashDictionary
+    //
+    //  C signature: void* ph_create(int count, const char* flat_keys, const char* flat_vals)
+    //
+    //  JS receives count (number) + keys (string[]) + vals (string[]) from C#.
+    //  Blazor serializes string[] as a JSON array, which JS receives as Array.
     // ══════════════════════════════════════════════════════════════════════
 
-    /**
-     * Builds a PerfectHashDictionary from an array of {k,v} objects.
-     * Encodes as "key1\x01val1\x01key2\x01val2\x01..." for the C wrapper.
-     * Returns integer handle or -1 on error.
-     */
-    // flat: plain string "key1\x01val1\x01key2\x01val2\x01..." built on the C# side.
-    // Previously received an object array and called .map() — but Blazor JSInterop
-    // serializes C# arrays as JSON objects (not JS Arrays), so .map() threw.
-    // Accepting a pre-built string avoids all serialization edge cases.
-    function phCreate(flat) {
-        return withStr(flat, fp => mod._ph_create(fp));
+    function phCreate(count, keys, vals) {
+        const kp = allocFlatStrings(keys);
+        const vp = allocFlatStrings(vals);
+        try {
+            return mod._ph_create(count, kp, vp);
+        } finally {
+            mod._free(kp);
+            mod._free(vp);
+        }
     }
 
-    function phFree(h) { mod._ph_free(h); }
+    function phFree(h)  { mod._ph_free(h); }
+    function phCount(h) { return mod._ph_count(h); }
 
-    /** Returns true / false. O(1) worst-case. */
     function phContains(h, key) {
         return withStr(key, kp => mod._ph_contains(h, kp) === 1);
     }
-
-    /** Returns value string or "" if not found. Uses TryGetValidatedValue. */
+    // C returns malloc'd char* — must readAndFree.
     function phGet(h, key) {
-        return withStr(key, kp => readStr(mod._ph_get(h, kp)));
+        return withStr(key, kp => readAndFree(mod._ph_get(h, kp)));
     }
-
-    function phCount(h) { return mod._ph_count(h); }
-
-    /**
-     * Returns a JSON array of all live key-value pairs.
-     * Iterates via PerfectHashIterator (skips tombstone slots).
-     */
+    // Snapshot returns malloc'd JSON [["k","v"],...] — must readAndFree.
     function phSnapshot(h) {
-        return readStr(mod._ph_snapshot(h));
+        return readAndFree(mod._ph_snapshot(h));
     }
 
-    // ── Public API ─────────────────────────────────────────────────────────
+    // ── Public API ──────────────────────────────────────────────────────────
     return {
         init, isReady, lastError,
 
@@ -155,6 +152,6 @@ window.DictoriumInterop = (() => {
         linearContains, linearGet, linearRemove, linearClear,
         linearCount, linearSnapshot,
 
-        phCreate, phFree, phContains, phGet, phCount, phSnapshot
+        phCreate, phFree, phContains, phGet, phCount, phSnapshot,
     };
 })();
