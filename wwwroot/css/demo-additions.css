@@ -293,3 +293,204 @@
   font-size: 10px;
   color: var(--text-3);
 }
+
+/* ── ChainingDictionary visualisation ────────────────────────── */
+
+.ch-empty-state {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-2);
+  border: 1px inset var(--border);
+  background: var(--bg-alt);
+  font-family: var(--font-serif);
+  font-size: 13px;
+}
+.ch-empty-icon { font-size: 32px; margin-bottom: 10px; color: var(--text-3); display: block; }
+
+/* Hash table rows */
+.ch-table-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 10px;
+}
+
+.ch-bucket-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  transition: background 0.12s, border-color 0.12s;
+  min-height: 30px;
+}
+
+.ch-bucket-row.ch-bucket-target {
+  background: #fffacc;
+  border-color: #998800;
+}
+
+.ch-bucket-row.ch-bucket-hit {
+  background: #ddf4dd;
+  border-color: #008800;
+}
+
+.ch-bucket-idx {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+  min-width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+  padding-right: 4px;
+}
+
+.ch-bucket-arrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-3);
+  min-width: 14px;
+  flex-shrink: 0;
+}
+
+.ch-null { color: var(--text-3); font-size: 11px; }
+
+/* Chain nodes */
+.ch-chain {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.ch-node {
+  border: 1px solid var(--border-dk);
+  background: var(--bg-alt);
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.ch-node.ch-node-hit {
+  background: #ddf4dd;
+  border-color: #008800;
+}
+
+.ch-node-key  { font-weight: bold; color: var(--text); }
+.ch-node-sep  { color: var(--text-3); font-size: 10px; }
+.ch-node-val  { color: var(--acc-b); }
+.ch-node-null { color: var(--text-3); font-family: var(--font-mono); font-size: 10px; font-style: italic; padding: 2px 4px; }
+
+.ch-chain-link {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  padding: 0 2px;
+}
+
+.ch-chain-len {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-3);
+  margin-left: auto;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  padding: 1px 3px;
+  background: var(--bg-alt);
+}
+
+/* Stats bar */
+.ch-stats-bar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+}
+
+.ch-stat-item { flex: 1 1 180px; }
+
+.ch-stat-label {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* Load factor bar */
+.ch-load-bar-wrap {
+  position: relative;
+  background: #e0e0d8;
+  height: 14px;
+  border: 1px inset var(--border);
+  display: flex;
+  align-items: center;
+}
+
+.ch-load-bar {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: #4ade80;
+  opacity: 0.7;
+  transition: width 0.3s;
+  max-width: 100%;
+}
+
+.ch-load-val {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding-left: 4px;
+  color: var(--text);
+}
+
+/* Distribution bars */
+.ch-dist-bars {
+  display: flex;
+  align-items: flex-end;
+  height: 28px;
+  gap: 1px;
+}
+
+.ch-dist-col {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.ch-dist-bar {
+  width: 100%;
+  background: #aaaaaa;
+  transition: height 0.3s, background 0.2s;
+  min-height: 2px;
+}
+
+.ch-dist-bar.ch-dist-bar-active {
+  background: #005500;
+}
+
+/* Legend dots */
+.ch-legend-dot {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+.ch-dot-target  { background: #fffacc; border-color: #998800; }
+.ch-dot-found   { background: #ddf4dd; border-color: #008800; }
+.ch-dot-miss    { background: #f4dddd; border-color: #880000; }
+.ch-dot-added   { background: #e0f0ff; border-color: #002288; }
+.ch-dot-empty   { background: var(--bg); border-color: var(--border); }

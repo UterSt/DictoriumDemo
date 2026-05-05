@@ -152,6 +152,78 @@ public class DictoriumJsService(IJSRuntime js)
         return ParseSnapshot(json);
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    //  ChainingDictionary<string, string>
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /// <summary>Creates a new ChainingDictionary instance. Returns handle ID.</summary>
+    public async Task<int> ChainingCreateAsync()
+        => await js.InvokeAsync<int>("DictoriumInterop.chainingCreate");
+
+    public async Task ChainingFreeAsync(int handle)
+        => await js.InvokeVoidAsync("DictoriumInterop.chainingFree", handle);
+
+    /// <summary>Returns true if key exists. Complexity: O(1+α)</summary>
+    public async Task<bool> ChainingContainsAsync(int handle, string key)
+        => await js.InvokeAsync<bool>("DictoriumInterop.chainingContains", handle, key);
+
+    /// <summary>Returns value string, or empty string if key absent. Complexity: O(1+α)</summary>
+    public async Task<string> ChainingGetAsync(int handle, string key)
+        => await js.InvokeAsync<string>("DictoriumInterop.chainingGet", handle, key) ?? string.Empty;
+
+    /// <summary>Returns true when key was new, false if key already existed. Complexity: O(1+α)</summary>
+    public async Task<bool> ChainingAddAsync(int handle, string key, string val)
+        => await js.InvokeAsync<bool>("DictoriumInterop.chainingAdd", handle, key, val);
+
+    /// <summary>Inserts or updates key-value pair. Complexity: O(1+α)</summary>
+    public async Task ChainingInsertOrAssignAsync(int handle, string key, string val)
+        => await js.InvokeVoidAsync("DictoriumInterop.chainingInsertOrAssign", handle, key, val);
+
+    /// <summary>Returns true if key was found and removed. Complexity: O(1+α)</summary>
+    public async Task<bool> ChainingRemoveAsync(int handle, string key)
+        => await js.InvokeAsync<bool>("DictoriumInterop.chainingRemove", handle, key);
+
+    /// <summary>Clears all entries. Complexity: O(m)</summary>
+    public async Task ChainingClearAsync(int handle)
+        => await js.InvokeVoidAsync("DictoriumInterop.chainingClear", handle);
+
+    /// <summary>Returns number of elements. Complexity: O(1)</summary>
+    public async Task<int> ChainingCountAsync(int handle)
+        => await js.InvokeAsync<int>("DictoriumInterop.chainingCount", handle);
+
+    /// <summary>
+    /// Returns a full snapshot of the hash table as a list of ChainBucket.
+    /// The C function returns JSON:
+    ///   {"bucketCount":N,"buckets":[[["k1","v1"],["k2","v2"]],[],["k3","v3"],...]}
+    /// </summary>
+    public async Task<List<ChainBucket>> ChainingSnapshotAsync(int handle)
+    {
+        var json = await js.InvokeAsync<string>("DictoriumInterop.chainingSnapshot", handle);
+        if (string.IsNullOrWhiteSpace(json)) return new();
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var bucketsJson = doc.RootElement.GetProperty("buckets");
+            var result = new List<ChainBucket>();
+            int slot = 0;
+            foreach (var bucketEl in bucketsJson.EnumerateArray())
+            {
+                var bucket = new ChainBucket { Slot = slot++ };
+                foreach (var pairEl in bucketEl.EnumerateArray())
+                {
+                    var arr = pairEl.EnumerateArray().ToArray();
+                    if (arr.Length >= 2)
+                        bucket.Chain.Add(new DictItem(
+                            arr[0].GetString() ?? string.Empty,
+                            arr[1].GetString() ?? string.Empty));
+                }
+                result.Add(bucket);
+            }
+            return result;
+        }
+        catch { return new(); }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -174,3 +246,11 @@ public class DictoriumJsService(IJSRuntime js)
 
 /// <summary>A key-value pair returned from the Dictorium WASM snapshot.</summary>
 public record DictItem(string Key, string Value);
+
+// (ChainBucket model — placed here to keep it near the chaining methods)
+/// <summary>One bucket in the ChainingDictionary hash table.</summary>
+public class ChainBucket
+{
+    public int Slot { get; set; }
+    public List<DictItem> Chain { get; set; } = new();
+}

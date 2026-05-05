@@ -144,6 +144,36 @@ window.DictoriumInterop = (() => {
         return readAndFree(mod._ph_snapshot(h));
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    //  ChainingDictionary
+    // ══════════════════════════════════════════════════════════════════════
+
+    function chainingCreate()  { return mod._chaining_create(); }
+    function chainingFree(h)   { mod._chaining_free(h); }
+    function chainingClear(h)  { mod._chaining_clear(h); }
+    function chainingCount(h)  { return mod._chaining_count(h); }
+
+    function chainingContains(h, key) {
+        return withStr(key, kp => mod._chaining_contains(h, kp) === 1);
+    }
+    // C returns malloc'd char* — must readAndFree.
+    function chainingGet(h, key) {
+        return withStr(key, kp => readAndFree(mod._chaining_get(h, kp)));
+    }
+    function chainingAdd(h, key, val) {
+        return withStr2(key, val, (kp, vp) => mod._chaining_add(h, kp, vp) === 1);
+    }
+    function chainingInsertOrAssign(h, key, val) {
+        withStr2(key, val, (kp, vp) => mod._chaining_insert_or_assign(h, kp, vp));
+    }
+    function chainingRemove(h, key) {
+        return withStr(key, kp => mod._chaining_remove(h, kp) === 1);
+    }
+    // Snapshot returns malloc'd JSON {"bucketCount":N,"buckets":[[["k","v"],...],[],...]}
+    function chainingSnapshot(h) {
+        return readAndFree(mod._chaining_snapshot(h));
+    }
+
     // ── Public API ──────────────────────────────────────────────────────────
     return {
         init, isReady, lastError,
@@ -153,5 +183,9 @@ window.DictoriumInterop = (() => {
         linearCount, linearSnapshot,
 
         phCreate, phFree, phContains, phGet, phCount, phSnapshot,
+
+        chainingCreate, chainingFree, chainingAdd, chainingInsertOrAssign,
+        chainingContains, chainingGet, chainingRemove, chainingClear,
+        chainingCount, chainingSnapshot,
     };
 })();
