@@ -29,6 +29,10 @@
            class="nav-link nav-demo @(IsActive("demo/linear") ? "active" : "")">
             LinearDictionary
         </a>
+        <a href="demo/lp"
+           class="nav-link nav-demo @(IsActive("demo/lp") ? "active" : "")">
+            LinearProbing
+        </a>
         <a href="demo/chaining"
            class="nav-link nav-demo @(IsActive("demo/chaining") ? "active" : "")">
             ChainingDict
@@ -46,7 +50,7 @@
     <footer class="app-footer">
         Dictorium Demo &nbsp;&middot;&nbsp;
         Библиотека <strong>Dictorium</strong> (C++) скомпилирована в WebAssembly через Emscripten &nbsp;&middot;&nbsp;
-        JSInterop: LinearDictionary · ChainingDictionary · PerfectHashDictionary
+        JSInterop: LinearDictionary · LinearProbingDictionary · ChainingDictionary · PerfectHashDictionary
     </footer>
 </div>
 

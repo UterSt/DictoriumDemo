@@ -18,10 +18,6 @@ public class DictoriumJsService(IJSRuntime js)
 
     // ── Initialisation ────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Loads the WebAssembly module (dictorium.js + dictorium.wasm).
-    /// Idempotent — safe to call multiple times.
-    /// </summary>
     public async Task InitAsync()
     {
         if (_initialized) return;
@@ -39,65 +35,33 @@ public class DictoriumJsService(IJSRuntime js)
     //  LinearDictionary<string, string>
     // ══════════════════════════════════════════════════════════════════════════
 
-    /// <summary>Creates a new LinearDictionary instance. Returns handle ID.</summary>
     public async Task<int> LinearCreateAsync()
         => await js.InvokeAsync<int>("DictoriumInterop.linearCreate");
 
     public async Task LinearFreeAsync(int handle)
         => await js.InvokeVoidAsync("DictoriumInterop.linearFree", handle);
 
-    /// <summary>
-    /// Calls dtr::LinearDictionary::Add.
-    /// Returns true on success, false if key already exists (ArgumentException in C++).
-    /// Complexity: O(n)
-    /// </summary>
     public async Task<bool> LinearAddAsync(int handle, string key, string val)
         => await js.InvokeAsync<bool>("DictoriumInterop.linearAdd", handle, key, val);
 
-    /// <summary>
-    /// Calls dtr::LinearDictionary::InsertOrAssign.
-    /// Updates value if key exists, appends otherwise.
-    /// Complexity: O(n)
-    /// </summary>
     public async Task LinearInsertOrAssignAsync(int handle, string key, string val)
         => await js.InvokeVoidAsync("DictoriumInterop.linearInsertOrAssign", handle, key, val);
 
-    /// <summary>
-    /// Calls dtr::LinearDictionary::ContainsKey — linear scan.
-    /// Complexity: O(n)
-    /// </summary>
     public async Task<bool> LinearContainsAsync(int handle, string key)
         => await js.InvokeAsync<bool>("DictoriumInterop.linearContains", handle, key);
 
-    /// <summary>
-    /// Calls dtr::LinearDictionary::TryGetValue.
-    /// Returns value string or empty string if not found.
-    /// Complexity: O(n)
-    /// </summary>
     public async Task<string> LinearGetAsync(int handle, string key)
         => await js.InvokeAsync<string>("DictoriumInterop.linearGet", handle, key);
 
-    /// <summary>
-    /// Calls dtr::LinearDictionary::Remove — finds and erases with element shift.
-    /// Returns true if key was present.
-    /// Complexity: O(n)
-    /// </summary>
     public async Task<bool> LinearRemoveAsync(int handle, string key)
         => await js.InvokeAsync<bool>("DictoriumInterop.linearRemove", handle, key);
 
-    /// <summary>Calls dtr::LinearDictionary::Clear. Complexity: O(n)</summary>
     public async Task LinearClearAsync(int handle)
         => await js.InvokeVoidAsync("DictoriumInterop.linearClear", handle);
 
-    /// <summary>Calls dtr::LinearDictionary::Count. Complexity: O(1)</summary>
     public async Task<int> LinearCountAsync(int handle)
         => await js.InvokeAsync<int>("DictoriumInterop.linearCount", handle);
 
-    /// <summary>
-    /// Returns all items in the internal _dict vector as a JSON snapshot.
-    /// Used to refresh the visualisation after each operation.
-    /// Parsed here into a list of (Key, Value) tuples.
-    /// </summary>
     public async Task<List<DictItem>> LinearSnapshotAsync(int handle)
     {
         var json = await js.InvokeAsync<string>("DictoriumInterop.linearSnapshot", handle);
@@ -108,15 +72,8 @@ public class DictoriumJsService(IJSRuntime js)
     //  PerfectHashDictionary<string, string>
     // ══════════════════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Calls dtr::PerfectHashDictionary constructor — two-level perfect hashing build.
-    /// Complexity: O(n^1.5) upper bound, O(n) expected.
-    /// Returns handle ID, or -1 on error.
-    /// </summary>
     public async Task<int> PhCreateAsync(List<DictItem> pairs)
     {
-        // C signature: void* ph_create(int count, const char* flat_keys, const char* flat_vals)
-        // Pass count + two string[] arrays; JS interop builds flat null-terminated buffers.
         var keys = pairs.Select(p => p.Key).ToArray();
         var vals = pairs.Select(p => p.Value).ToArray();
         return await js.InvokeAsync<int>("DictoriumInterop.phCreate", pairs.Count, keys, vals);
@@ -125,27 +82,15 @@ public class DictoriumJsService(IJSRuntime js)
     public async Task PhFreeAsync(int handle)
         => await js.InvokeVoidAsync("DictoriumInterop.phFree", handle);
 
-    /// <summary>
-    /// Calls dtr::PerfectHashDictionary::ContainsKey — strictly O(1)/Ω(1).
-    /// Two hash computations + one memory access, no collisions.
-    /// </summary>
     public async Task<bool> PhContainsAsync(int handle, string key)
         => await js.InvokeAsync<bool>("DictoriumInterop.phContains", handle, key);
 
-    /// <summary>
-    /// Calls dtr::PerfectHashDictionary::TryGetValidatedValue — O(1), full key check.
-    /// Returns value string or empty if not found.
-    /// </summary>
     public async Task<string> PhGetAsync(int handle, string key)
         => await js.InvokeAsync<string>("DictoriumInterop.phGet", handle, key);
 
-    /// <summary>Calls dtr::PerfectHashDictionary::Count — O(1).</summary>
     public async Task<int> PhCountAsync(int handle)
         => await js.InvokeAsync<int>("DictoriumInterop.phCount", handle);
 
-    /// <summary>
-    /// Returns all live key-value pairs via PerfectHashIterator (skips tombstones).
-    /// </summary>
     public async Task<List<DictItem>> PhSnapshotAsync(int handle)
     {
         var json = await js.InvokeAsync<string>("DictoriumInterop.phSnapshot", handle);
@@ -153,48 +98,142 @@ public class DictoriumJsService(IJSRuntime js)
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    //  LinearProbingDictionary<string, string>
+    // ══════════════════════════════════════════════════════════════════════════
+
+    public async Task<int> LpCreateAsync()
+        => await js.InvokeAsync<int>("DictoriumInterop.lpCreate");
+
+    public async Task LpFreeAsync(int handle)
+        => await js.InvokeVoidAsync("DictoriumInterop.lpFree", handle);
+
+    public async Task<bool> LpContainsAsync(int handle, string key)
+        => await js.InvokeAsync<bool>("DictoriumInterop.lpContains", handle, key);
+
+    public async Task<string> LpGetAsync(int handle, string key)
+        => await js.InvokeAsync<string>("DictoriumInterop.lpGet", handle, key) ?? string.Empty;
+
+    public async Task<bool> LpAddAsync(int handle, string key, string val)
+        => await js.InvokeAsync<bool>("DictoriumInterop.lpAdd", handle, key, val);
+
+    public async Task LpInsertOrAssignAsync(int handle, string key, string val)
+        => await js.InvokeVoidAsync("DictoriumInterop.lpInsertOrAssign", handle, key, val);
+
+    public async Task<bool> LpRemoveAsync(int handle, string key)
+        => await js.InvokeAsync<bool>("DictoriumInterop.lpRemove", handle, key);
+
+    public async Task LpClearAsync(int handle)
+        => await js.InvokeVoidAsync("DictoriumInterop.lpClear", handle);
+
+    public async Task<int> LpCountAsync(int handle)
+        => await js.InvokeAsync<int>("DictoriumInterop.lpCount", handle);
+
+    /// <summary>
+    /// Returns a snapshot of the hash table as LpSnapshot.
+    ///
+    /// Actual WASM JSON format (verified against dictorium.wasm at runtime):
+    ///   {"capacity":8,"slots":[
+    ///     {"state":0},
+    ///     {"state":1,"key":"apple","value":"яблоко"},
+    ///     {"state":2,"key":"banana"},
+    ///     ...
+    ///   ]}
+    ///
+    ///   state 0 = empty
+    ///   state 1 = occupied  (has "key" and "value" fields)
+    ///   state 2 = tombstone (has "key", no "value")
+    ///
+    /// WASM does NOT include a top-level "count" field — computed from slots.
+    /// WASM does NOT include a home-slot "h" field — estimated via backward walk.
+    /// </summary>
+    public async Task<LpSnapshot> LpSnapshotAsync(int handle)
+    {
+        var json = await js.InvokeAsync<string>("DictoriumInterop.lpSnapshot", handle);
+        if (string.IsNullOrWhiteSpace(json)) return new LpSnapshot();
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root      = doc.RootElement;
+            var snap      = new LpSnapshot();
+
+            if (root.TryGetProperty("capacity", out var capEl))
+                snap.Capacity = capEl.GetInt32();
+
+            if (!root.TryGetProperty("slots", out var slotsEl))
+                return snap;
+
+            int idx = 0;
+            foreach (var el in slotsEl.EnumerateArray())
+            {
+                var slot = new LpSlot { Index = idx++ };
+
+                if (el.ValueKind == JsonValueKind.Object &&
+                    el.TryGetProperty("state", out var stateEl))
+                {
+                    switch (stateEl.GetInt32())
+                    {
+                        case 1: // Occupied
+                            slot.State = LpSlotState.Occupied;
+                            if (el.TryGetProperty("key",   out var kEl)) slot.Key   = kEl.GetString() ?? "";
+                            if (el.TryGetProperty("value", out var vEl)) slot.Value = vEl.GetString() ?? "";
+                            break;
+                        case 2: // Tombstone
+                            slot.State = LpSlotState.Deleted;
+                            break;
+                        default: // 0 = empty
+                            slot.State = LpSlotState.Empty;
+                            break;
+                    }
+                }
+                // else: malformed element → treat as empty
+                snap.Slots.Add(slot);
+            }
+
+            // Count occupied slots (WASM JSON has no top-level count field)
+            snap.Count = snap.Slots.Count(s => s.State == LpSlotState.Occupied);
+
+            // Estimate home slot for each occupied entry via backward-walk
+            foreach (var s in snap.Slots.Where(s => s.State == LpSlotState.Occupied))
+                s.HomeSlot = snap.EstimateHomeSlot(s.Index);
+
+            return snap;
+        }
+        catch { return new LpSnapshot(); }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     //  ChainingDictionary<string, string>
     // ══════════════════════════════════════════════════════════════════════════
 
-    /// <summary>Creates a new ChainingDictionary instance. Returns handle ID.</summary>
     public async Task<int> ChainingCreateAsync()
         => await js.InvokeAsync<int>("DictoriumInterop.chainingCreate");
 
     public async Task ChainingFreeAsync(int handle)
         => await js.InvokeVoidAsync("DictoriumInterop.chainingFree", handle);
 
-    /// <summary>Returns true if key exists. Complexity: O(1+α)</summary>
     public async Task<bool> ChainingContainsAsync(int handle, string key)
         => await js.InvokeAsync<bool>("DictoriumInterop.chainingContains", handle, key);
 
-    /// <summary>Returns value string, or empty string if key absent. Complexity: O(1+α)</summary>
     public async Task<string> ChainingGetAsync(int handle, string key)
         => await js.InvokeAsync<string>("DictoriumInterop.chainingGet", handle, key) ?? string.Empty;
 
-    /// <summary>Returns true when key was new, false if key already existed. Complexity: O(1+α)</summary>
     public async Task<bool> ChainingAddAsync(int handle, string key, string val)
         => await js.InvokeAsync<bool>("DictoriumInterop.chainingAdd", handle, key, val);
 
-    /// <summary>Inserts or updates key-value pair. Complexity: O(1+α)</summary>
     public async Task ChainingInsertOrAssignAsync(int handle, string key, string val)
         => await js.InvokeVoidAsync("DictoriumInterop.chainingInsertOrAssign", handle, key, val);
 
-    /// <summary>Returns true if key was found and removed. Complexity: O(1+α)</summary>
     public async Task<bool> ChainingRemoveAsync(int handle, string key)
         => await js.InvokeAsync<bool>("DictoriumInterop.chainingRemove", handle, key);
 
-    /// <summary>Clears all entries. Complexity: O(m)</summary>
     public async Task ChainingClearAsync(int handle)
         => await js.InvokeVoidAsync("DictoriumInterop.chainingClear", handle);
 
-    /// <summary>Returns number of elements. Complexity: O(1)</summary>
     public async Task<int> ChainingCountAsync(int handle)
         => await js.InvokeAsync<int>("DictoriumInterop.chainingCount", handle);
 
     /// <summary>
-    /// Returns a full snapshot of the hash table as a list of ChainBucket.
-    /// The C function returns JSON:
-    ///   {"bucketCount":N,"buckets":[[["k1","v1"],["k2","v2"]],[],["k3","v3"],...]}
+    /// JSON: {"bucketCount":N,"buckets":[[["k1","v1"],["k2","v2"]],[],["k3","v3"],...]}
     /// </summary>
     public async Task<List<ChainBucket>> ChainingSnapshotAsync(int handle)
     {
@@ -202,10 +241,10 @@ public class DictoriumJsService(IJSRuntime js)
         if (string.IsNullOrWhiteSpace(json)) return new();
         try
         {
-            using var doc = JsonDocument.Parse(json);
-            var bucketsJson = doc.RootElement.GetProperty("buckets");
-            var result = new List<ChainBucket>();
-            int slot = 0;
+            using var doc       = JsonDocument.Parse(json);
+            var bucketsJson     = doc.RootElement.GetProperty("buckets");
+            var result          = new List<ChainBucket>();
+            int slot            = 0;
             foreach (var bucketEl in bucketsJson.EnumerateArray())
             {
                 var bucket = new ChainBucket { Slot = slot++ };
@@ -226,17 +265,11 @@ public class DictoriumJsService(IJSRuntime js)
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Parses the WASM snapshot format: [["key1","val1"],["key2","val2"],...]
-    /// The C++ _build_snapshot() template emits an array of 2-element arrays —
-    /// NOT the old {"k":...,"v":...} object format.
-    /// </summary>
     private static List<DictItem> ParseSnapshot(string json)
     {
         if (string.IsNullOrEmpty(json) || json == "[]") return new();
         try
         {
-            // Each element is a 2-element string array: ["key", "value"]
             var rows = JsonSerializer.Deserialize<string[][]>(json)!;
             return rows.Select(r => new DictItem(r[0], r[1])).ToList();
         }
@@ -247,10 +280,81 @@ public class DictoriumJsService(IJSRuntime js)
 /// <summary>A key-value pair returned from the Dictorium WASM snapshot.</summary>
 public record DictItem(string Key, string Value);
 
-// (ChainBucket model — placed here to keep it near the chaining methods)
 /// <summary>One bucket in the ChainingDictionary hash table.</summary>
 public class ChainBucket
 {
     public int Slot { get; set; }
     public List<DictItem> Chain { get; set; } = new();
+}
+
+// ── LinearProbing models ──────────────────────────────────────────────────────
+
+public enum LpSlotState { Empty, Occupied, Deleted }
+
+public class LpSlot
+{
+    public int         Index    { get; set; }
+    public LpSlotState State    { get; set; }
+    public string      Key      { get; set; } = string.Empty;
+    public string      Value    { get; set; } = string.Empty;
+    /// <summary>
+    /// Estimated home slot — start of the contiguous run in the current table.
+    /// Set by LpSnapshot.EstimateHomeSlot() after parsing.  -1 = not computed.
+    /// </summary>
+    public int         HomeSlot { get; set; } = -1;
+}
+
+public class LpSnapshot
+{
+    public int          Capacity { get; set; }
+    public int          Count    { get; set; }
+    public List<LpSlot> Slots    { get; set; } = new();
+
+    public double LoadFactor    => Capacity > 0 ? (double)Count / Capacity : 0;
+    public int    TombstoneCount => Slots.Count(s => s.State == LpSlotState.Deleted);
+
+    /// <summary>Find slot index where key lives, -1 if not found.</summary>
+    public int FindKey(string key) =>
+        Slots.FirstOrDefault(s => s.State == LpSlotState.Occupied && s.Key == key)?.Index ?? -1;
+
+    /// <summary>
+    /// Estimate the home slot for the entry at <paramref name="slotIndex"/> by
+    /// walking backward through the table until an empty slot is reached.
+    /// The first slot in the contiguous occupied/tombstone run is the home estimate.
+    /// </summary>
+    public int EstimateHomeSlot(int slotIndex)
+    {
+        if (Capacity == 0) return slotIndex;
+        int cap  = Capacity;
+        int home = slotIndex;
+        for (int i = 1; i < cap; i++)
+        {
+            int prev = (slotIndex - i + cap) % cap;
+            var s = Slots.FirstOrDefault(x => x.Index == prev);
+            if (s == null || s.State == LpSlotState.Empty)
+                break;
+            home = prev;
+        }
+        return home;
+    }
+
+    /// <summary>
+    /// Reconstruct the probe path for a key starting at homeSlot.
+    /// Returns slot indices visited until the key is found or an empty slot is hit.
+    /// </summary>
+    public List<int> ProbePath(int homeSlot, string key)
+    {
+        var path = new List<int>();
+        if (Capacity == 0) return path;
+        int cap = Capacity;
+        for (int i = 0; i < cap; i++)
+        {
+            int si = (homeSlot + i) % cap;
+            path.Add(si);
+            var s = Slots.FirstOrDefault(x => x.Index == si);
+            if (s == null || s.State == LpSlotState.Empty) break;
+            if (s.State == LpSlotState.Occupied && s.Key == key) break;
+        }
+        return path;
+    }
 }

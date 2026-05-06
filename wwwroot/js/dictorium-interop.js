@@ -145,6 +145,36 @@ window.DictoriumInterop = (() => {
     }
 
     // ══════════════════════════════════════════════════════════════════════
+    //  LinearProbingDictionary
+    // ══════════════════════════════════════════════════════════════════════
+
+    function lpCreate()  { return mod._lp_create(); }
+    function lpFree(h)   { mod._lp_free(h); }
+    function lpClear(h)  { mod._lp_clear(h); }
+    function lpCount(h)  { return mod._lp_count(h); }
+
+    function lpContains(h, key) {
+        return withStr(key, kp => mod._lp_contains(h, kp) === 1);
+    }
+    // C returns malloc'd char* — must readAndFree.
+    function lpGet(h, key) {
+        return withStr(key, kp => readAndFree(mod._lp_get(h, kp)));
+    }
+    function lpAdd(h, key, val) {
+        return withStr2(key, val, (kp, vp) => mod._lp_add(h, kp, vp) === 1);
+    }
+    function lpInsertOrAssign(h, key, val) {
+        withStr2(key, val, (kp, vp) => mod._lp_insert_or_assign(h, kp, vp));
+    }
+    function lpRemove(h, key) {
+        return withStr(key, kp => mod._lp_remove(h, kp) === 1);
+    }
+    // Snapshot returns malloc'd JSON — must readAndFree.
+    function lpSnapshot(h) {
+        return readAndFree(mod._lp_snapshot(h));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
     //  ChainingDictionary
     // ══════════════════════════════════════════════════════════════════════
 
@@ -183,6 +213,10 @@ window.DictoriumInterop = (() => {
         linearCount, linearSnapshot,
 
         phCreate, phFree, phContains, phGet, phCount, phSnapshot,
+
+        lpCreate, lpFree, lpAdd, lpInsertOrAssign,
+        lpContains, lpGet, lpRemove, lpClear,
+        lpCount, lpSnapshot,
 
         chainingCreate, chainingFree, chainingAdd, chainingInsertOrAssign,
         chainingContains, chainingGet, chainingRemove, chainingClear,

@@ -1,0 +1,599 @@
+@page "/demo/lp"
+@inject DictoriumJsService Dtr
+
+<PageTitle>LinearProbingDictionary — Демо — Dictorium</PageTitle>
+
+<div class="page-wrap">
+
+    <div class="breadcrumb">
+        <a href="">Обзор</a>
+        <span class="bc-sep">›</span>
+        <span class="bc-now">LinearProbingDictionary [LIVE]</span>
+    </div>
+
+    <div class="struct-head-bar">
+        <div class="struct-issue-num" style="color:var(--acc-g)">
+            dtr::LinearProbingDictionary&lt;string, string&gt; — реальная библиотека Dictorium через WASM
+        </div>
+        <h1 class="struct-h1">Линейное пробирование</h1>
+        <div class="struct-en">LinearProbingDictionary.h · открытая адресация · метод линейного пробирования</div>
+        <p class="struct-description">
+            Все элементы хранятся <strong>прямо в таблице</strong> — без указателей и списков.
+            При коллизии алгоритм идёт вперёд по слотам до первого свободного (<em>probe sequence</em>).
+            Удалённые слоты помечаются <em>tombstone</em> и не прерывают поиск.
+            Все вызовы идут через <code>dtr::LinearProbingDictionary</code> скомпилированную в WebAssembly.
+        </p>
+        <div class="struct-tags">
+            <span class="s-tag">ContainsKey O(1) avg</span>
+            <span class="s-tag">Add O(1) avg</span>
+            <span class="s-tag">Remove O(1) avg</span>
+            <span class="s-tag">α &lt; 0.7 рекомендуется</span>
+            @if (_wasmReady)
+            {
+                <span class="s-tag" style="color:var(--acc-g);border-color:var(--acc-g)">● WASM готов</span>
+            }
+            else
+            {
+                <span class="s-tag" style="color:var(--acc-r)">○ Загрузка WASM...</span>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="demo-status @_statusCls">
+            <strong>@_statusIcon</strong>&nbsp; @_status
+        </div>
+    }
+
+    @if (!_wasmReady)
+    {
+        <div class="comp-hint">Загрузка WebAssembly модуля Dictorium...</div>
+    }
+    else
+    {
+        <div class="demo-layout">
+
+            <!-- ── Controls ── -->
+            <div class="demo-controls">
+
+                <div class="ctrl-section">
+                    <div class="ctrl-section-title">Ключ (Key)</div>
+                    <input class="search-input" style="width:100%;"
+                           @bind="_keyInput" @bind:event="oninput"
+                           placeholder="apple"
+                           disabled="@_busy" />
+                    <div class="ctrl-section-title" style="margin-top:6px;">Значение (Value)</div>
+                    <input class="search-input" style="width:100%;margin-bottom:0;"
+                           @bind="_valInput" @bind:event="oninput"
+                           placeholder="яблоко"
+                           disabled="@_busy" />
+                </div>
+
+                <div class="ctrl-ops">
+                    <button class="btn-op btn-search" @onclick="DoContains"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                        ▶ ContainsKey(key)
+                    </button>
+                    <button class="btn-op btn-search" @onclick="DoGet"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                        ▶ TryGetValue(key)
+                    </button>
+                    <button class="btn-op btn-add" @onclick="DoAdd"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                        + Add(key, value)
+                    </button>
+                    <button class="btn-op btn-add" @onclick="DoInsertOrAssign"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                        ± InsertOrAssign(key, value)
+                    </button>
+                    <button class="btn-op btn-remove" @onclick="DoRemove"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                        − Remove(key)
+                    </button>
+                    <button class="btn-op btn-clear" @onclick="DoClear" disabled="@_busy">
+                        ⊘ Clear()
+                    </button>
+                </div>
+
+                <div class="ctrl-info">
+                    <div class="ctrl-info-row">
+                        <span>Count</span>
+                        <span class="ctrl-info-val">@_snap.Count</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Capacity</span>
+                        <span class="ctrl-info-val">@_snap.Capacity</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Загрузка (α)</span>
+                        <span class="ctrl-info-val">@_snap.LoadFactor.ToString("F2")</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Tombstones</span>
+                        <span class="ctrl-info-val">@_snap.TombstoneCount</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Пробирований</span>
+                        <span class="ctrl-info-val">@_lastProbeLen</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Результат</span>
+                        <span class="ctrl-info-val">@_result</span>
+                    </div>
+                </div>
+
+                <div class="ctrl-legend">
+                    <div class="legend-title">Легенда</div>
+                    <div class="legend-row">
+                        <span class="lp-legend-dot lp-dot-empty"></span> Пустой слот
+                    </div>
+                    <div class="legend-row">
+                        <span class="lp-legend-dot lp-dot-occ"></span> Занятый слот
+                    </div>
+                    <div class="legend-row">
+                        <span class="lp-legend-dot lp-dot-del"></span> Tombstone (удалён)
+                    </div>
+                    <div class="legend-row">
+                        <span class="lp-legend-dot lp-dot-probe"></span> Пробируется
+                    </div>
+                    <div class="legend-row">
+                        <span class="lp-legend-dot lp-dot-col"></span> Коллизия (пропуск)
+                    </div>
+                    <div class="legend-row" style="font-size:10px;color:var(--text-3);margin-top:4px;">
+                        <span style="border-left:3px solid #0044cc;padding-left:4px;">home</span>
+                        &nbsp;— начало probe sequence
+                    </div>
+                </div>
+
+                <div class="ctrl-section">
+                    <div class="ctrl-section-title">Быстрая загрузка</div>
+                    <button class="btn-op" @onclick="LoadSample" disabled="@_busy" style="font-size:10px;">
+                        ↓ Загрузить 8 пар (пример)
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- ── Main visualisation ── -->
+            <div class="demo-main">
+
+                <div class="viz-section">
+                    <div class="viz-section-head">
+                        <span class="viz-section-title">Хэш-таблица — линейное пробирование</span>
+                        <span class="viz-section-info">
+                            @_snap.Capacity слотов · @_snap.Count элементов
+                            @if (_snap.TombstoneCount > 0)
+                            {
+                                <span> · @_snap.TombstoneCount tombstone</span>
+                            }
+                        </span>
+                    </div>
+
+                    @* FIX: empty table still has 8 slots — check Count, not Slots.Count *@
+                    @if (_snap.Capacity == 0)
+                    {
+                        <div class="ch-empty-state">
+                            <div class="ch-empty-icon">⊟</div>
+                            <div>Ожидание WASM...</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="lp-table-wrap" style="position:relative;padding-left:16px;">
+                            @foreach (var slot in _snap.Slots)
+                            {
+                                string rowCls  = GetSlotCls(slot);
+                                bool   isHome  = slot.Index == _probeHome && _probeHome >= 0;
+                                bool   isProbe = _probeCursor == slot.Index;
+
+                                <div class="lp-slot-row @rowCls @(isHome ? "lp-home" : "")">
+                                    @if (isProbe)
+                                    {
+                                        <div class="lp-probe-arrow">▶</div>
+                                    }
+
+                                    <div class="lp-slot-idx">[@slot.Index]</div>
+
+                                    <div class="lp-slot-state">
+                                        @switch (slot.State)
+                                        {
+                                            case LpSlotState.Empty:
+                                                <span class="lp-state-empty">○</span>
+                                                break;
+                                            case LpSlotState.Occupied:
+                                                <span class="lp-state-occ">●</span>
+                                                break;
+                                            case LpSlotState.Deleted:
+                                                <span class="lp-state-del">✕</span>
+                                                break;
+                                        }
+                                    </div>
+
+                                    <div class="lp-slot-body">
+                                        @if (isHome)
+                                        {
+                                            <span class="lp-home-badge">home</span>
+                                        }
+                                        @switch (slot.State)
+                                        {
+                                            case LpSlotState.Empty:
+                                                <span class="lp-slot-null">— пусто —</span>
+                                                break;
+                                            case LpSlotState.Deleted:
+                                                <span class="lp-slot-del-label">tombstone</span>
+                                                break;
+                                            case LpSlotState.Occupied:
+                                                <span class="lp-slot-key" title="@slot.Key">@TruncStr(slot.Key, 12)</span>
+                                                <span class="lp-slot-sep">→</span>
+                                                <span class="lp-slot-val" title="@slot.Value">@TruncStr(slot.Value, 12)</span>
+                                                break;
+                                        }
+                                    </div>
+
+                                    @if (slot.State == LpSlotState.Occupied && slot.HomeSlot >= 0
+                                         && slot.HomeSlot != slot.Index)
+                                    {
+                                        <div class="lp-slot-hash">h=@slot.HomeSlot</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @if (_snap.Count == 0)
+                        {
+                            <div style="text-align:center;padding:8px;font-family:var(--font-ui);
+                                        font-size:11px;color:var(--text-3);border:1px dotted var(--border);
+                                        margin-bottom:6px;">
+                                Таблица инициализирована · все @_snap.Capacity слотов пусты
+                            </div>
+                        }
+
+                        <!-- Stats bar -->
+                        <div class="lp-stats-bar">
+                            <div class="lp-stat-item">
+                                <span class="lp-stat-label">Загрузка α = n / cap</span>
+                                <div class="lp-load-bar-wrap">
+                                    <div class="lp-load-bar @LoadBarWarnCls" style="@LoadBarStyle"></div>
+                                    <span class="lp-load-val">@_snap.LoadFactor.ToString("F2")</span>
+                                </div>
+                            </div>
+                            @if (_lastProbePath.Count > 0)
+                            {
+                                <div class="lp-stat-item">
+                                    <span class="lp-stat-label">Последний probe sequence</span>
+                                    <div class="lp-probe-trail">
+                                        @for (int pi = 0; pi < _lastProbePath.Count; pi++)
+                                        {
+                                            int si = _lastProbePath[pi];
+                                            var s  = _snap.Slots.FirstOrDefault(x => x.Index == si);
+                                            string trailCls = pi == 0 ? "lp-trail-home"
+                                                : pi == _lastProbePath.Count - 1 && _lastProbeHit ? "lp-trail-hit"
+                                                : s?.State == LpSlotState.Deleted ? "lp-trail-del"
+                                                : "lp-trail-col";
+                                            @if (pi > 0)
+                                            {
+                                                <span class="lp-trail-arrow">→</span>
+                                            }
+                                            <span class="lp-trail-slot @trailCls">[@si]</span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <!-- Log -->
+                <div class="viz-section" style="margin-top:8px;">
+                    <div class="viz-section-head">
+                        <span class="viz-section-title">Лог операций</span>
+                        <button class="btn-op btn-clear"
+                                style="padding:1px 6px;font-size:10px;width:auto;"
+                                @onclick="ClearLog">
+                            очистить
+                        </button>
+                    </div>
+                    <div class="demo-log">
+                        @if (_log.Count == 0)
+                        {
+                            <div class="log-line log-miss">// нет операций</div>
+                        }
+                        else
+                        {
+                            @for (int li = _log.Count - 1; li >= 0; li--)
+                            {
+                                <div class="log-line @_log[li].Cls">@_log[li].Text</div>
+                            }
+                        }
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    // ── State ─────────────────────────────────────────────────────────────────
+    private bool _wasmReady;
+    private bool _busy;
+    private int  _handle = -1;
+
+    private LpSnapshot _snap = new();
+
+    // Animation
+    private int        _probeCursor  = -1;
+    private int        _probeHome    = -1;
+    private List<int>  _lastProbePath = new();
+    private bool       _lastProbeHit;
+
+    private Dictionary<int, string> _slotCls = new();
+
+    private string _keyInput   = string.Empty;
+    private string _valInput   = string.Empty;
+    private string _status     = string.Empty;
+    private string _statusCls  = string.Empty;
+    private string _statusIcon = string.Empty;
+    private string _result     = "—";
+    private int    _lastProbeLen;
+
+    private readonly List<LogEntry> _log = new();
+    private struct LogEntry { public string Text; public string Cls; }
+
+    private const int StepMs = 300;
+
+    // ── Computed ──────────────────────────────────────────────────────────────
+    private string LoadBarStyle
+    {
+        get
+        {
+            double pct = Math.Min(_snap.LoadFactor * 100.0, 100.0);
+            return $"width:{pct:F0}%";
+        }
+    }
+    private string LoadBarWarnCls => _snap.LoadFactor switch
+    {
+        > 0.85 => "lp-load-crit",
+        > 0.65 => "lp-load-warn",
+        _      => ""
+    };
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Dtr.InitAsync();
+        _handle    = await Dtr.LpCreateAsync();
+        _snap      = await Dtr.LpSnapshotAsync(_handle);
+        _wasmReady = true;
+        StateHasChanged();
+    }
+
+    // ── Operations ────────────────────────────────────────────────────────────
+
+    private async Task DoContains()
+    {
+        _busy = true; ClearAnim();
+        var key   = _keyInput.Trim();
+        bool found = await Dtr.LpContainsAsync(_handle, key);
+        _snap = await Dtr.LpSnapshotAsync(_handle);
+
+        int keySlot = _snap.FindKey(key);
+        await AnimateProbe(key, keySlot, found);
+
+        SetStatus($"ContainsKey({key}) → {found}", found ? "status-ok" : "status-err", found ? "✓" : "✗");
+        _result = found ? "true" : "false";
+        AddLog($"ContainsKey({key}) → {found} ({_lastProbeLen} probe)", found ? "log-ok" : "log-miss");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoGet()
+    {
+        _busy = true; ClearAnim();
+        var key = _keyInput.Trim();
+        string val = await Dtr.LpGetAsync(_handle, key);
+        _snap = await Dtr.LpSnapshotAsync(_handle);
+
+        bool found = !string.IsNullOrEmpty(val);
+        int  keySlot = _snap.FindKey(key);
+        await AnimateProbe(key, keySlot, found);
+
+        SetStatus(found ? $"TryGetValue({key}) → \"{val}\"" : $"TryGetValue({key}) → не найдено",
+                  found ? "status-ok" : "status-err", found ? "✓" : "✗");
+        _result = found ? $"\"{val}\"" : "не найдено";
+        AddLog($"Get({key}) → {(found ? val : "∅")} ({_lastProbeLen} probe)", found ? "log-ok" : "log-miss");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoAdd()
+    {
+        _busy = true; ClearAnim();
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+
+        bool ok = await Dtr.LpAddAsync(_handle, key, val);
+        _snap = await Dtr.LpSnapshotAsync(_handle);
+
+        int keySlot = _snap.FindKey(key);
+        await AnimateProbe(key, keySlot, true);
+
+        if (ok)
+        {
+            SetStatus($"Add({key}, {val}) — успешно", "status-ok", "✓");
+            _result = "добавлено";
+            AddLog($"Add({key}) → ok, slot [{keySlot}] ({_lastProbeLen} probe)", "log-ok");
+        }
+        else
+        {
+            SetStatus($"Add({key}) — ключ уже существует", "status-err", "✗");
+            _result = "уже есть";
+            AddLog($"Add({key}) → exists", "log-err");
+        }
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoInsertOrAssign()
+    {
+        _busy = true; ClearAnim();
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+
+        bool wasPresent = _snap.FindKey(key) >= 0;
+
+        await Dtr.LpInsertOrAssignAsync(_handle, key, val);
+        _snap = await Dtr.LpSnapshotAsync(_handle);
+
+        int keySlot = _snap.FindKey(key);
+        await AnimateProbe(key, keySlot, true);
+
+        string mode = wasPresent ? "обновлено" : "вставлено";
+        SetStatus($"InsertOrAssign({key}, {val}) — {mode}", "status-ok", "✓");
+        _result = mode;
+        AddLog($"InsertOrAssign({key}) → {mode}, slot [{keySlot}] ({_lastProbeLen} probe)", "log-ok");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoRemove()
+    {
+        _busy = true; ClearAnim();
+        var key = _keyInput.Trim();
+
+        // Snapshot before to know where key was (for animation)
+        var snapBefore = _snap;
+        int keySlot    = snapBefore.FindKey(key);
+
+        bool ok = await Dtr.LpRemoveAsync(_handle, key);
+        _snap = await Dtr.LpSnapshotAsync(_handle);
+
+        if (ok)
+        {
+            int home = keySlot >= 0
+                ? (snapBefore.Slots.FirstOrDefault(s => s.Index == keySlot)?.HomeSlot ?? keySlot)
+                : keySlot;
+            await AnimateProbeManual(snapBefore, key, keySlot, home, true);
+            SetStatus($"Remove({key}) — удалено (tombstone [{keySlot}])", "status-ok", "✓");
+            _result = "удалено";
+            AddLog($"Remove({key}) → ok, tombstone [{keySlot}] ({_lastProbeLen} probe)", "log-ok");
+        }
+        else
+        {
+            SetStatus($"Remove({key}) — ключ не найден", "status-err", "✗");
+            _result = "не найдено";
+            AddLog($"Remove({key}) → miss", "log-miss");
+        }
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoClear()
+    {
+        _busy = true; ClearAnim();
+        await Dtr.LpClearAsync(_handle);
+        _snap = await Dtr.LpSnapshotAsync(_handle);
+        _lastProbePath.Clear();
+        SetStatus("Clear() — таблица очищена", "status-ok", "✓");
+        _result = "—";
+        AddLog("Clear()", "log-op");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task LoadSample()
+    {
+        _busy = true; ClearAnim();
+        string[] pairs =
+        {
+            "apple",  "яблоко",  "banana", "банан",
+            "cherry", "вишня",   "date",   "финик",
+            "elderberry","бузина","fig",    "инжир",
+            "grape",  "виноград","hazel",  "лещина"
+        };
+        for (int i = 0; i < pairs.Length; i += 2)
+            await Dtr.LpAddAsync(_handle, pairs[i], pairs[i + 1]);
+        _snap = await Dtr.LpSnapshotAsync(_handle);
+        SetStatus($"Загружено {_snap.Count} пар", "status-ok", "✓");
+        AddLog($"Sample: загружено {_snap.Count} пар", "log-ok");
+        _busy = false; StateHasChanged();
+    }
+
+    private void ClearLog() => _log.Clear();
+
+    // ── Animation ─────────────────────────────────────────────────────────────
+
+    private async Task AnimateProbe(string key, int keySlot, bool hit)
+    {
+        if (_snap.Capacity == 0 || keySlot < 0)
+        {
+            _lastProbePath.Clear();
+            _lastProbeLen = 0;
+            _lastProbeHit = hit;
+            return;
+        }
+        var keySlotObj = _snap.Slots.FirstOrDefault(s => s.Index == keySlot);
+        // Use estimated home slot; fall back to key's actual slot if not set
+        int home = (keySlotObj?.HomeSlot >= 0) ? keySlotObj.HomeSlot : keySlot;
+        await AnimateProbeManual(_snap, key, keySlot, home, hit);
+    }
+
+    private async Task AnimateProbeManual(LpSnapshot snap, string key, int targetSlot, int home, bool hit)
+    {
+        if (snap.Capacity == 0) return;
+
+        _probeHome = home;
+        var path = snap.ProbePath(home, key);
+
+        _lastProbePath = path.Count > 0 ? new List<int>(path) : new List<int>();
+        _lastProbeHit  = hit;
+        _lastProbeLen  = path.Count;
+
+        for (int pi = 0; pi < path.Count; pi++)
+        {
+            _probeCursor = path[pi];
+            _slotCls[path[pi]] = (pi == path.Count - 1 && hit) ? "lp-hit"
+                : (pi == 0) ? "lp-probe"
+                : "lp-collision";
+            StateHasChanged();
+            await Task.Delay(StepMs);
+        }
+
+        _probeCursor = -1;
+        StateHasChanged();
+        await Task.Delay(500);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private string GetSlotCls(LpSlot slot)
+    {
+        if (_slotCls.TryGetValue(slot.Index, out var animCls))
+            return animCls;
+
+        return slot.State switch
+        {
+            LpSlotState.Empty    => "lp-empty",
+            LpSlotState.Occupied => "lp-occ",
+            LpSlotState.Deleted  => "lp-del",
+            _                    => ""
+        };
+    }
+
+    private void ClearAnim()
+    {
+        _probeCursor = -1;
+        _probeHome   = -1;
+        _slotCls.Clear();
+    }
+
+    private void SetStatus(string msg, string cls, string icon)
+    {
+        _status = msg; _statusCls = cls; _statusIcon = icon;
+    }
+
+    private void AddLog(string text, string cls)
+    {
+        _log.Add(new LogEntry { Text = text, Cls = cls });
+        if (_log.Count > 50) _log.RemoveAt(0);
+    }
+
+    private static string TruncStr(string s, int max) =>
+        s.Length <= max ? s : s[..max] + "…";
+}

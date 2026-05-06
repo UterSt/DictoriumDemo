@@ -294,6 +294,201 @@
   color: var(--text-3);
 }
 
+/* ── LinearProbingDictionary visualisation ───────────────────── */
+
+.lp-table-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+/* One slot row */
+.lp-slot-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  min-height: 28px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  transition: background 0.1s, border-color 0.1s;
+  position: relative;
+}
+
+/* Slot states */
+.lp-slot-row.lp-empty   { background: var(--bg); }
+.lp-slot-row.lp-occ     { background: var(--bg); }
+.lp-slot-row.lp-del     { background: #fff8e8; border-color: #ccaa44; }
+
+/* Animation highlights */
+.lp-slot-row.lp-probe   { background: #fffacc; border-color: #998800; }
+.lp-slot-row.lp-hit     { background: #ddf4dd; border-color: #008800; }
+.lp-slot-row.lp-collision { background: #f0e8ff; border-color: #7700cc; }
+.lp-slot-row.lp-home    { border-left: 3px solid #0044cc; }
+
+/* Probe cursor arrow */
+.lp-probe-arrow {
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #998800;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+/* Slot index column */
+.lp-slot-idx {
+  min-width: 32px;
+  text-align: right;
+  padding: 0 6px 0 4px;
+  color: var(--text-3);
+  font-size: 10px;
+  flex-shrink: 0;
+  border-right: 1px dotted var(--border);
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* State indicator column */
+.lp-slot-state {
+  min-width: 20px;
+  text-align: center;
+  padding: 0 4px;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+.lp-state-empty   { color: var(--text-3); }
+.lp-state-occ     { color: var(--acc-g); }
+.lp-state-del     { color: #aa7700; }
+
+/* Home badge: shows when hash(key) % cap == this slot */
+.lp-home-badge {
+  font-size: 9px;
+  font-family: var(--font-ui);
+  background: #ddeeff;
+  border: 1px solid #3366aa;
+  color: #002277;
+  padding: 0 3px;
+  margin-right: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Key-value body */
+.lp-slot-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  overflow: hidden;
+}
+.lp-slot-key  { font-weight: bold; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px; }
+.lp-slot-sep  { color: var(--text-3); font-size: 10px; flex-shrink: 0; }
+.lp-slot-val  { color: var(--acc-b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px; }
+.lp-slot-null { color: var(--text-3); font-style: italic; font-size: 10px; }
+.lp-slot-del-label { color: #aa7700; font-style: italic; font-size: 10px; }
+
+/* Hash column (right side) */
+.lp-slot-hash {
+  font-size: 9px;
+  color: var(--text-3);
+  padding: 0 6px;
+  flex-shrink: 0;
+  font-family: var(--font-ui);
+  text-align: right;
+  min-width: 40px;
+}
+
+/* Stats bar */
+.lp-stats-bar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+}
+.lp-stat-item { flex: 1 1 180px; }
+.lp-stat-label {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* Load factor bar */
+.lp-load-bar-wrap {
+  position: relative;
+  background: #e0e0d8;
+  height: 14px;
+  border: 1px inset var(--border);
+  display: flex;
+  align-items: center;
+}
+.lp-load-bar {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: #4ade80;
+  opacity: 0.7;
+  transition: width 0.3s;
+  max-width: 100%;
+}
+.lp-load-bar.lp-load-warn  { background: #facc15; }
+.lp-load-bar.lp-load-crit  { background: #f87171; }
+.lp-load-val {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding-left: 4px;
+  color: var(--text);
+}
+
+/* Probe sequence trail (last op visualization) */
+.lp-probe-trail {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.lp-trail-slot {
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 1px 5px;
+  color: var(--text-2);
+}
+.lp-trail-slot.lp-trail-home     { background: #ddeeff; border-color: #3366aa; color: #002277; }
+.lp-trail-slot.lp-trail-hit      { background: #ddf4dd; border-color: #008800; color: #003300; }
+.lp-trail-slot.lp-trail-del      { background: #fff8e8; border-color: #ccaa44; }
+.lp-trail-slot.lp-trail-col      { background: #f0e8ff; border-color: #7700cc; }
+.lp-trail-arrow { color: var(--text-3); font-family: var(--font-mono); font-size: 10px; }
+
+/* Legend dots */
+.lp-legend-dot {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+.lp-dot-empty { background: var(--bg); border-color: var(--border); }
+.lp-dot-occ   { background: #ddf4dd; border-color: #008800; }
+.lp-dot-del   { background: #fff8e8; border-color: #ccaa44; }
+.lp-dot-probe { background: #fffacc; border-color: #998800; }
+.lp-dot-col   { background: #f0e8ff; border-color: #7700cc; }
+
 /* ── ChainingDictionary visualisation ────────────────────────── */
 
 .ch-empty-state {
