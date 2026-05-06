@@ -1,0 +1,678 @@
+@page "/demo/avl"
+@inject DictoriumJsService Dtr
+@inject NavigationManager Nav
+
+<PageTitle>AvlDictionary — Демо — Dictorium</PageTitle>
+
+<div class="page-wrap">
+
+    <div class="breadcrumb">
+        <a href="">Обзор</a>
+        <span class="bc-sep">›</span>
+        <span class="bc-now">AvlDictionary [LIVE]</span>
+    </div>
+
+    <div class="struct-head-bar">
+        <div class="struct-issue-num" style="color:var(--acc-g)">
+            dtr::AvlDictionary&lt;string, string&gt; — реальная библиотека Dictorium через WASM
+        </div>
+        <h1 class="struct-h1">АВЛ-дерево</h1>
+        <div class="struct-en">AvlDictionary.h · O(log n) · самобалансирующееся двоичное дерево поиска</div>
+        <p class="struct-description">
+            <strong>АВЛ-дерево</strong> (Адельсон-Вельский и Ландис, 1962) — первое самобалансирующееся двоичное
+            дерево поиска. Для каждого узла высоты левого и правого поддеревьев отличаются не более чем на&nbsp;1.
+            После каждой вставки или удаления выполняются одиночные и двойные ротации для восстановления баланса.
+            Все вызовы идут через <code>dtr::AvlDictionary</code>, скомпилированную в WebAssembly через Emscripten.
+        </p>
+        <div class="struct-tags">
+            <span class="s-tag">Contains O(log n)</span>
+            <span class="s-tag">Add O(log n)</span>
+            <span class="s-tag">Remove O(log n)</span>
+            <span class="s-tag">Height ≤ 1.44 log₂(n+2)</span>
+            @if (_wasmReady)
+            {
+                <span class="s-tag" style="color:var(--acc-g);border-color:var(--acc-g)">● WASM готов</span>
+            }
+            else
+            {
+                <span class="s-tag" style="color:var(--acc-r)">○ Загрузка WASM...</span>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="demo-status @_statusCls">
+            <strong>@_statusIcon</strong>&nbsp; @_status
+        </div>
+    }
+
+    @if (!_wasmReady)
+    {
+        <div class="comp-hint">Загрузка WebAssembly модуля Dictorium...</div>
+    }
+    else
+    {
+        <div class="demo-layout">
+
+            <!-- ── Controls ─────────────────────────────────────────── -->
+            <div class="demo-controls">
+                <div class="ctrl-section">
+                    <div class="ctrl-section-title">Ключ (Key)</div>
+                    <input class="search-input" style="width:100%;"
+                           @bind="_keyInput" @bind:event="oninput"
+                           placeholder="apple"
+                           disabled="@_busy" />
+                    <div class="ctrl-section-title" style="margin-top:6px;">Значение (Value)</div>
+                    <input class="search-input" style="width:100%;margin-bottom:0;"
+                           @bind="_valInput" @bind:event="oninput"
+                           placeholder="яблоко"
+                           disabled="@_busy" />
+                </div>
+
+                <div class="ctrl-ops">
+                    <button class="btn-op btn-search" @onclick="DoContains"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                        ▶ Contains(key)
+                    </button>
+                    <button class="btn-op btn-search" @onclick="DoGet"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                        ▶ Get(key)
+                    </button>
+                    <button class="btn-op btn-add" @onclick="DoAdd"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                        + Add(key, value)
+                    </button>
+                    <button class="btn-op btn-add" @onclick="DoInsertOrAssign"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                        ± InsertOrAssign(key, value)
+                    </button>
+                    <button class="btn-op btn-remove" @onclick="DoRemove"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                        − Remove(key)
+                    </button>
+                    <button class="btn-op btn-clear" @onclick="DoClear" disabled="@_busy">
+                        ⊘ Clear()
+                    </button>
+                    <button class="btn-op btn-build" @onclick="DoLoadSample" disabled="@_busy">
+                        ★ Загрузить пример
+                    </button>
+                </div>
+
+                <div class="ctrl-info">
+                    <div class="ctrl-info-row">
+                        <span>Count()</span>
+                        <span class="ctrl-info-val">@_count</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Height()</span>
+                        <span class="ctrl-info-val">@_height</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Шагов поиска</span>
+                        <span class="ctrl-info-val">@(_searchSteps > 0 ? _searchSteps.ToString() : "—")</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Результат</span>
+                        <span class="ctrl-info-val">@(_result ?? "—")</span>
+                    </div>
+                </div>
+
+                <div class="ctrl-legend">
+                    <div class="legend-title">Легенда</div>
+                    <div class="legend-row">
+                        <span class="avl-legend-swatch avl-swatch-normal"></span>
+                        <span>Узел дерева</span>
+                    </div>
+                    <div class="legend-row">
+                        <span class="avl-legend-swatch avl-swatch-scanning"></span>
+                        <span>Путь поиска (шаг N)</span>
+                    </div>
+                    <div class="legend-row">
+                        <span class="avl-legend-swatch avl-swatch-hit"></span>
+                        <span>Найден / добавлен</span>
+                    </div>
+                    <div class="legend-row">
+                        <span class="avl-legend-swatch avl-swatch-miss"></span>
+                        <span>Не найден</span>
+                    </div>
+                    <div style="margin-top:8px;font-family:var(--font-ui);font-size:10px;color:var(--text-3);line-height:1.4;">
+                        Структура дерева реконструируется из упорядоченного снимка (in-order) WASM и
+                        аппроксимирует реальное АВЛ-дерево.
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Tree Visualization ───────────────────────────────── -->
+            <div class="demo-main">
+                <div class="avl-tree-wrap">
+                    @if (_count == 0)
+                    {
+                        <div class="avl-empty-state">
+                            <span class="avl-empty-icon">🌲</span>
+                            <div>Дерево пустое.</div>
+                            <div style="font-size:11px;margin-top:4px;">Добавьте элементы или нажмите <strong>★ Загрузить пример</strong>.</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div style="overflow-x:auto;overflow-y:hidden;">
+                            <svg viewBox="0 0 @_svgW @_svgH"
+                                 width="@_svgW" height="@_svgH"
+                                 xmlns="http://www.w3.org/2000/svg"
+                                 style="display:block;">
+
+                                <!-- Normal edges first -->
+                                @foreach (var e in _edges)
+                                {
+                                    if (!_animPathEdges.Contains((e.FromKey, e.ToKey)))
+                                    {
+                                        <line x1="@Fmt(e.X1)" y1="@Fmt(e.Y1)"
+                                              x2="@Fmt(e.X2)" y2="@Fmt(e.Y2)"
+                                              stroke="#9aafcc" stroke-width="1.5"/>
+                                    }
+                                }
+                                <!-- Path edges on top (amber, thicker) -->
+                                @foreach (var e in _edges)
+                                {
+                                    if (_animPathEdges.Contains((e.FromKey, e.ToKey)))
+                                    {
+                                        <line x1="@Fmt(e.X1)" y1="@Fmt(e.Y1)"
+                                              x2="@Fmt(e.X2)" y2="@Fmt(e.Y2)"
+                                              stroke="#cc8800" stroke-width="3"
+                                              stroke-dasharray="6,3"/>
+                                    }
+                                }
+
+                                <!-- Nodes -->
+                                @foreach (var node in _allNodes)
+                                {
+                                    var rx   = Fmt(node.X - NW / 2);
+                                    var ry   = Fmt(node.Y - NH / 2);
+                                    var cx   = Fmt(node.X);
+                                    var ty1  = Fmt(node.Y - 6);
+                                    var divY = Fmt(node.Y + 1);
+                                    var ty2  = Fmt(node.Y + 13);
+                                    var lx1  = Fmt(node.X - NW / 2 + 5);
+                                    var lx2  = Fmt(node.X + NW / 2 - 5);
+                                    var st   = GetNodeState(node.Key);
+
+                                    string fill, stroke, sw, textFill;
+                                    switch (st)
+                                    {
+                                        case NodeState.Scanning:
+                                            fill="#fffacc"; stroke="#cc8800"; sw="2.5"; textFill="#554400";
+                                            break;
+                                        case NodeState.Hit:
+                                            fill="#ddf4dd"; stroke="#008800"; sw="2"; textFill="#111111";
+                                            break;
+                                        case NodeState.Miss:
+                                            fill="#f4dddd"; stroke="#880000"; sw="2"; textFill="#111111";
+                                            break;
+                                        default:
+                                            fill="#f5f5ef"; stroke="#8899aa"; sw="1"; textFill="#111111";
+                                            break;
+                                    }
+
+                                    <g>
+                                        <rect x="@rx" y="@ry" width="@NW" height="@NH"
+                                              rx="3" ry="3"
+                                              fill="@fill" stroke="@stroke" stroke-width="@sw"/>
+                                        <text x="@cx" y="@ty1" text-anchor="middle"
+                                              font-family="'Courier New',Courier,monospace"
+                                              font-size="11" font-weight="bold" fill="@textFill">
+                                            @Trunc(node.Key, 14)
+                                        </text>
+                                        <line x1="@lx1" y1="@divY" x2="@lx2" y2="@divY"
+                                              stroke="#cccccc" stroke-width="0.5"/>
+                                        <text x="@cx" y="@ty2" text-anchor="middle"
+                                              font-family="'Courier New',Courier,monospace"
+                                              font-size="10" fill="#0044aa">
+                                            @Trunc(node.Value, 14)
+                                        </text>
+                                    </g>
+                                }
+                            </svg>
+                        </div>
+
+                        <div class="avl-tree-note">
+                            <span>Высота WASM: <strong>@_height</strong></span>
+                            <span class="avl-note-sep">·</span>
+                            <span>Узлов: <strong>@_count</strong></span>
+                            @if (_count > 1)
+                            {
+                                <span class="avl-note-sep">·</span>
+                                <span>Макс. теор. высота: <strong>@((int)Math.Ceiling(1.44 * Math.Log2(_count + 2)))</strong></span>
+                            }
+                            <span class="avl-note-sep">·</span>
+                            <em style="color:var(--text-3);">реконструкция из in-order снимка</em>
+                        </div>
+                    }
+                </div>
+
+                <!-- Log -->
+                <div class="ctrl-section-title" style="margin-top:10px;">Журнал операций</div>
+                <div class="demo-log">
+                    @foreach (var line in _log)
+                    {
+                        <div class="log-line @line.Cls">@line.Text</div>
+                    }
+                    @if (!_log.Any())
+                    {
+                        <span style="color:var(--text-3);font-style:italic;">пусто</span>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    // ── WASM ────────────────────────────────────────────────────────────
+    private bool _wasmReady;
+    private int  _handle;
+
+    // ── UI ──────────────────────────────────────────────────────────────
+    private bool    _busy;
+    private string  _keyInput = "";
+    private string  _valInput = "";
+    private string? _result;
+    private int     _count;
+    private int     _height;
+    private int     _searchSteps;
+
+    // ── Status ──────────────────────────────────────────────────────────
+    private string _status    = "";
+    private string _statusCls = "";
+    private string _statusIcon= "";
+
+    // ── Log ─────────────────────────────────────────────────────────────
+    private record LogLine(string Text, string Cls);
+    private readonly List<LogLine> _log = new();
+    private const int MaxLog = 60;
+
+    // ── Animation ────────────────────────────────────────────────────────
+    private const int StepMs = 400;
+
+    /// Keys visited so far on path (all shown amber/scanning)
+    private readonly HashSet<string> _animPathKeys  = new();
+    /// Parent→child edge pairs that are on the current path (shown amber)
+    private readonly HashSet<(string, string)> _animPathEdges = new();
+    /// Key of the final found node (green); null = none
+    private string? _animHit;
+    /// Key of the last visited node when not found (red); null = none
+    private string? _animMiss;
+
+    // ── Tree model ───────────────────────────────────────────────────────
+    private enum NodeState { Normal, Scanning, Hit, Miss }
+
+    private class TreeNode
+    {
+        public string    Key   = "";
+        public string    Value = "";
+        public int       Depth;
+        public double    X, Y;
+        public TreeNode? Left, Right;
+    }
+
+    private record EdgeInfo(double X1, double Y1, double X2, double Y2, string FromKey, string ToKey);
+
+    private TreeNode?       _treeRoot;
+    private List<TreeNode>  _allNodes = new();
+    private List<EdgeInfo>  _edges    = new();
+    private double _svgW, _svgH;
+
+    // Layout constants
+    private const double XSpacing = 130;
+    private const double YSpacing = 82;
+    private const double XPad     = 65;
+    private const double YPad     = 46;
+    private const double NW       = 120;
+    private const double NH       = 42;
+
+    // ── Lifecycle ────────────────────────────────────────────────────────
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Dtr.InitAsync();
+        _handle    = await Dtr.AvlCreateAsync();
+        _wasmReady = true;
+        StateHasChanged();
+    }
+
+    // ── Operations ───────────────────────────────────────────────────────
+
+    private async Task DoContains()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput)) return;
+        _busy = true;
+        var key   = _keyInput.Trim();
+        var found = await Dtr.AvlContainsAsync(_handle, key);
+        Log($"▶ Contains(\"{key}\") → {(found ? "true" : "false")}",
+            found ? "log-ok" : "log-miss");
+
+        await BuildTreeSnapshot();
+        await AnimateSearch(key, found ? NodeState.Hit : NodeState.Miss);
+        await Task.Delay(700);
+
+        _result = found ? "true" : "false";
+        _searchSteps = _animPathKeys.Count;
+        SetStatus(found ? $"Contains(\"{key}\") → true"
+                        : $"Contains(\"{key}\") → false",
+                  found ? "status-ok" : "status-err",
+                  found ? "✓" : "✗");
+
+        ClearAnim();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoGet()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+        var val = await Dtr.AvlGetAsync(_handle, key);
+        var found = !string.IsNullOrEmpty(val);
+        Log(found ? $"▶ Get(\"{key}\") → \"{val}\""
+                  : $"▶ Get(\"{key}\") → null",
+            found ? "log-ok" : "log-miss");
+
+        await BuildTreeSnapshot();
+        await AnimateSearch(key, found ? NodeState.Hit : NodeState.Miss);
+        await Task.Delay(700);
+
+        _result = found ? val : "null";
+        _searchSteps = _animPathKeys.Count;
+        SetStatus(found ? $"Get(\"{key}\") → \"{val}\""
+                        : $"Get(\"{key}\") → null",
+                  found ? "status-ok" : "status-err",
+                  found ? "✓" : "✗");
+
+        ClearAnim();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoAdd()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+
+        // Animate the insertion-point search on pre-add snapshot
+        await BuildTreeSnapshot();
+        bool dupInTree = _treeRoot != null
+            && (FindSearchPath(_treeRoot, key).LastOrDefault()?.Key == key);
+        // Animate with Scanning only (final state applied after WASM result)
+        await AnimateSearch(key, NodeState.Normal);
+        await Task.Delay(200);
+
+        var ok = await Dtr.AvlAddAsync(_handle, key, val);
+        Log(ok ? $"+ Add(\"{key}\", \"{val}\")"
+               : $"✗ Add(\"{key}\") — дубликат",
+            ok ? "log-ok" : "log-err");
+
+        _result       = ok ? "ok" : "dup";
+        _searchSteps  = _animPathKeys.Count;
+
+        if (ok)
+        {
+            // Rebuild tree; show newly added node green
+            ClearAnim();
+            _animHit = key;
+            await BuildTreeSnapshot();
+            SetStatus($"Add(\"{key}\", \"{val}\") → ok", "status-ok", "✓");
+            StateHasChanged();
+            await Task.Delay(700);
+        }
+        else
+        {
+            // Show duplicate node red
+            _animMiss = key;
+            _animHit  = null;
+            SetStatus($"Add(\"{key}\") → дубликат", "status-err", "✗");
+            StateHasChanged();
+            await Task.Delay(700);
+        }
+
+        ClearAnim();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoInsertOrAssign()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+
+        await BuildTreeSnapshot();
+        await AnimateSearch(key, NodeState.Normal);
+        await Task.Delay(200);
+
+        await Dtr.AvlInsertOrAssignAsync(_handle, key, val);
+        Log($"± InsertOrAssign(\"{key}\", \"{val}\")", "log-ok");
+        _result      = "ok";
+        _searchSteps = _animPathKeys.Count;
+
+        ClearAnim();
+        _animHit = key;
+        await BuildTreeSnapshot();
+        SetStatus($"InsertOrAssign(\"{key}\", \"{val}\")", "status-ok", "✓");
+        StateHasChanged();
+        await Task.Delay(700);
+
+        ClearAnim();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoRemove()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+
+        // Animate search path on pre-remove tree
+        await BuildTreeSnapshot();
+        bool existsInTree = _treeRoot != null
+            && (FindSearchPath(_treeRoot, key).LastOrDefault()?.Key == key);
+
+        await AnimateSearch(key, existsInTree ? NodeState.Miss : NodeState.Miss);
+        await Task.Delay(400);
+
+        var ok = await Dtr.AvlRemoveAsync(_handle, key);
+        Log(ok ? $"− Remove(\"{key}\")"
+               : $"✗ Remove(\"{key}\") — не найден",
+            ok ? "log-ok" : "log-miss");
+        _result      = ok ? "ok" : "miss";
+        _searchSteps = _animPathKeys.Count;
+        SetStatus(ok ? $"Remove(\"{key}\") → ok"
+                     : $"Remove(\"{key}\") → не найден",
+                  ok ? "status-ok" : "status-err",
+                  ok ? "✓" : "✗");
+
+        // Rebuild: removed node is gone
+        ClearAnim();
+        await BuildTreeSnapshot();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoClear()
+    {
+        if (_busy) return;
+        _busy = true;
+        await Dtr.AvlClearAsync(_handle);
+        _result = null; _searchSteps = 0;
+        SetStatus("Clear() — дерево очищено", "status-ok", "✓");
+        Log("⊘ Clear()", "log-op");
+        ClearAnim();
+        await BuildTreeSnapshot();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoLoadSample()
+    {
+        if (_busy) return;
+        _busy = true;
+        await Dtr.AvlClearAsync(_handle);
+        var sample = new[]
+        {
+            ("banana",     "банан"),
+            ("apple",      "яблоко"),
+            ("cherry",     "вишня"),
+            ("dog",        "собака"),
+            ("cat",        "кошка"),
+            ("elderberry", "бузина"),
+            ("fig",        "инжир"),
+            ("grape",      "виноград"),
+            ("hawk",       "ястреб"),
+            ("iris",       "ирис"),
+            ("jasmine",    "жасмин"),
+            ("kiwi",       "киви"),
+        };
+        foreach (var (k, v) in sample)
+            await Dtr.AvlAddAsync(_handle, k, v);
+        SetStatus("Загружен пример — 12 элементов", "status-ok", "✓");
+        Log("★ Загружен пример (12 элементов)", "log-ok");
+        ClearAnim();
+        await BuildTreeSnapshot();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    // ── Animation core ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Animate BST traversal step-by-step, lighting each node amber in turn.
+    /// finalState = Hit → last node green; Miss → red; Normal → no final colour.
+    /// </summary>
+    private async Task AnimateSearch(string key, NodeState finalState)
+    {
+        var path = FindSearchPath(_treeRoot, key);
+
+        _animPathKeys.Clear();
+        _animPathEdges.Clear();
+        _animHit  = null;
+        _animMiss = null;
+
+        for (int i = 0; i < path.Count; i++)
+        {
+            if (i > 0) _animPathEdges.Add((path[i - 1].Key, path[i].Key));
+            _animPathKeys.Add(path[i].Key);
+
+            bool isLast = i == path.Count - 1;
+            if (isLast)
+            {
+                if      (finalState == NodeState.Hit)  _animHit  = path[i].Key;
+                else if (finalState == NodeState.Miss) _animMiss = path[i].Key;
+            }
+
+            StateHasChanged();
+            await Task.Delay(StepMs);
+        }
+    }
+
+    // ── Snapshot & tree rebuild ───────────────────────────────────────────
+
+    private async Task BuildTreeSnapshot()
+    {
+        var items = await Dtr.AvlSnapshotAsync(_handle);
+        _count  = await Dtr.AvlCountAsync(_handle);
+        _height = await Dtr.AvlHeightAsync(_handle);
+
+        _treeRoot = BuildTree(items, 0, items.Count - 1, 0);
+        _allNodes = new();
+        _edges    = new();
+
+        int rank = 0;
+        AssignPositions(_treeRoot, ref rank);
+        CollectNodesAndEdges(_treeRoot);
+
+        int n = items.Count;
+        _svgW = n > 0 ? n * XSpacing : 200;
+        _svgH = n > 0 ? YPad * 2 + _height * YSpacing + NH : 120;
+    }
+
+    private static TreeNode? BuildTree(List<DictItem> sorted, int lo, int hi, int depth)
+    {
+        if (lo > hi) return null;
+        int mid = (lo + hi) / 2;
+        return new TreeNode
+        {
+            Key   = sorted[mid].Key,
+            Value = sorted[mid].Value,
+            Depth = depth,
+            Left  = BuildTree(sorted, lo, mid - 1, depth + 1),
+            Right = BuildTree(sorted, mid + 1, hi, depth + 1),
+        };
+    }
+
+    private static void AssignPositions(TreeNode? node, ref int rank)
+    {
+        if (node == null) return;
+        AssignPositions(node.Left, ref rank);
+        node.X = XPad + rank * XSpacing;
+        node.Y = YPad + node.Depth * YSpacing;
+        rank++;
+        AssignPositions(node.Right, ref rank);
+    }
+
+    private void CollectNodesAndEdges(TreeNode? node)
+    {
+        if (node == null) return;
+        _allNodes.Add(node);
+        if (node.Left  != null) { _edges.Add(new(node.X, node.Y, node.Left.X,  node.Left.Y,  node.Key, node.Left.Key));  CollectNodesAndEdges(node.Left);  }
+        if (node.Right != null) { _edges.Add(new(node.X, node.Y, node.Right.X, node.Right.Y, node.Key, node.Right.Key)); CollectNodesAndEdges(node.Right); }
+    }
+
+    private static List<TreeNode> FindSearchPath(TreeNode? root, string key)
+    {
+        var path = new List<TreeNode>();
+        var node = root;
+        while (node != null)
+        {
+            path.Add(node);
+            int cmp = string.Compare(key, node.Key, StringComparison.Ordinal);
+            if (cmp == 0) break;
+            node = cmp < 0 ? node.Left : node.Right;
+        }
+        return path;
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+
+    private NodeState GetNodeState(string key)
+    {
+        if (key == _animHit)                   return NodeState.Hit;
+        if (key == _animMiss)                  return NodeState.Miss;
+        if (_animPathKeys.Contains(key))        return NodeState.Scanning;
+        return NodeState.Normal;
+    }
+
+    private void ClearAnim()
+    {
+        _animPathKeys.Clear();
+        _animPathEdges.Clear();
+        _animHit  = null;
+        _animMiss = null;
+    }
+
+    private void SetStatus(string msg, string cls, string icon)
+    { _status = msg; _statusCls = cls; _statusIcon = icon; }
+
+    private void Log(string text, string cls)
+    {
+        _log.Insert(0, new LogLine(text, cls));
+        if (_log.Count > MaxLog) _log.RemoveAt(_log.Count - 1);
+    }
+
+    private static string Fmt(double d)        => d.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+    private static string Trunc(string s, int max) => s.Length <= max ? s : s[..max] + "…";
+}

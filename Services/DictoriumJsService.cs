@@ -263,6 +263,48 @@ public class DictoriumJsService(IJSRuntime js)
         catch { return new(); }
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    //  AvlDictionary<string, string>
+    // ══════════════════════════════════════════════════════════════════════════
+
+    public async Task<int> AvlCreateAsync()
+        => await js.InvokeAsync<int>("DictoriumInterop.avlCreate");
+
+    public async Task AvlFreeAsync(int handle)
+        => await js.InvokeVoidAsync("DictoriumInterop.avlFree", handle);
+
+    public async Task<bool> AvlAddAsync(int handle, string key, string val)
+        => await js.InvokeAsync<bool>("DictoriumInterop.avlAdd", handle, key, val);
+
+    public async Task AvlInsertOrAssignAsync(int handle, string key, string val)
+        => await js.InvokeVoidAsync("DictoriumInterop.avlInsertOrAssign", handle, key, val);
+
+    public async Task<bool> AvlContainsAsync(int handle, string key)
+        => await js.InvokeAsync<bool>("DictoriumInterop.avlContains", handle, key);
+
+    /// <summary>avl_get returns an internal pointer — not malloc'd, no free.</summary>
+    public async Task<string> AvlGetAsync(int handle, string key)
+        => await js.InvokeAsync<string>("DictoriumInterop.avlGet", handle, key) ?? string.Empty;
+
+    public async Task<bool> AvlRemoveAsync(int handle, string key)
+        => await js.InvokeAsync<bool>("DictoriumInterop.avlRemove", handle, key);
+
+    public async Task AvlClearAsync(int handle)
+        => await js.InvokeVoidAsync("DictoriumInterop.avlClear", handle);
+
+    public async Task<int> AvlCountAsync(int handle)
+        => await js.InvokeAsync<int>("DictoriumInterop.avlCount", handle);
+
+    public async Task<int> AvlHeightAsync(int handle)
+        => await js.InvokeAsync<int>("DictoriumInterop.avlHeight", handle);
+
+    /// <summary>Returns in-order (sorted) snapshot as a flat key-value list.</summary>
+    public async Task<List<DictItem>> AvlSnapshotAsync(int handle)
+    {
+        var json = await js.InvokeAsync<string>("DictoriumInterop.avlSnapshot", handle);
+        return ParseSnapshot(json);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static List<DictItem> ParseSnapshot(string json)

@@ -689,3 +689,54 @@
 .ch-dot-miss    { background: #f4dddd; border-color: #880000; }
 .ch-dot-added   { background: #e0f0ff; border-color: #002288; }
 .ch-dot-empty   { background: var(--bg); border-color: var(--border); }
+
+/* ── AvlDictionary visualisation ──────────────────────────────── */
+
+.avl-tree-wrap {
+  border: 1px inset var(--border);
+  background: var(--bg);
+  padding: 10px;
+  margin-bottom: 8px;
+  min-height: 120px;
+}
+
+.avl-empty-state {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-2);
+  font-family: var(--font-serif);
+  font-size: 13px;
+}
+.avl-empty-icon {
+  font-size: 36px;
+  margin-bottom: 10px;
+  display: block;
+}
+
+.avl-tree-note {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: var(--text-2);
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.avl-note-sep {
+  color: var(--text-3);
+  padding: 0 2px;
+}
+
+/* Legend swatches */
+.avl-legend-swatch {
+  display: inline-block;
+  width: 22px;
+  height: 12px;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+.avl-swatch-normal   { background: #f5f5ef; border-color: #8899aa; }
+.avl-swatch-scanning { background: #fffacc; border-color: #cc8800; }
+.avl-swatch-hit      { background: #ddf4dd; border-color: #008800; }
+.avl-swatch-miss     { background: #f4dddd; border-color: #880000; }

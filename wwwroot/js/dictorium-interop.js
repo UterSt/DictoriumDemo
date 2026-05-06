@@ -204,6 +204,37 @@ window.DictoriumInterop = (() => {
         return readAndFree(mod._chaining_snapshot(h));
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    //  AvlDictionary
+    // ══════════════════════════════════════════════════════════════════════
+
+    function avlCreate()  { return mod._avl_create(); }
+    function avlFree(h)   { mod._avl_free(h); }
+    function avlClear(h)  { mod._avl_clear(h); }
+    function avlCount(h)  { return mod._avl_count(h); }
+    function avlHeight(h) { return mod._avl_height(h); }
+
+    function avlContains(h, key) {
+        return withStr(key, kp => mod._avl_contains(h, kp) === 1);
+    }
+    // avl_get returns an internal pointer — use readStr, do NOT free.
+    function avlGet(h, key) {
+        return withStr(key, kp => readStr(mod._avl_get(h, kp)));
+    }
+    function avlAdd(h, key, val) {
+        return withStr2(key, val, (kp, vp) => mod._avl_add(h, kp, vp) === 1);
+    }
+    function avlInsertOrAssign(h, key, val) {
+        withStr2(key, val, (kp, vp) => mod._avl_insert_or_assign(h, kp, vp));
+    }
+    function avlRemove(h, key) {
+        return withStr(key, kp => mod._avl_remove(h, kp) === 1);
+    }
+    // Snapshot returns malloc'd JSON [[\"k\",\"v\"],...] sorted in-order — must readAndFree.
+    function avlSnapshot(h) {
+        return readAndFree(mod._avl_snapshot(h));
+    }
+
     // ── Public API ──────────────────────────────────────────────────────────
     return {
         init, isReady, lastError,
@@ -221,5 +252,9 @@ window.DictoriumInterop = (() => {
         chainingCreate, chainingFree, chainingAdd, chainingInsertOrAssign,
         chainingContains, chainingGet, chainingRemove, chainingClear,
         chainingCount, chainingSnapshot,
+
+        avlCreate, avlFree, avlAdd, avlInsertOrAssign,
+        avlContains, avlGet, avlRemove, avlClear,
+        avlCount, avlHeight, avlSnapshot,
     };
 })();
