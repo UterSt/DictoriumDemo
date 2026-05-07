@@ -205,6 +205,36 @@ window.DictoriumInterop = (() => {
     }
 
     // ══════════════════════════════════════════════════════════════════════
+    //  CuckooDictionary
+    // ══════════════════════════════════════════════════════════════════════
+
+    function cuckooCreate()  { return mod._cuckoo_create(); }
+    function cuckooFree(h)   { mod._cuckoo_free(h); }
+    function cuckooClear(h)  { mod._cuckoo_clear(h); }
+    function cuckooCount(h)  { return mod._cuckoo_count(h); }
+
+    function cuckooContains(h, key) {
+        return withStr(key, kp => mod._cuckoo_contains(h, kp) === 1);
+    }
+    // C returns malloc'd char* — must readAndFree.
+    function cuckooGet(h, key) {
+        return withStr(key, kp => readAndFree(mod._cuckoo_get(h, kp)));
+    }
+    function cuckooAdd(h, key, val) {
+        return withStr2(key, val, (kp, vp) => mod._cuckoo_add(h, kp, vp) === 1);
+    }
+    function cuckooInsertOrAssign(h, key, val) {
+        withStr2(key, val, (kp, vp) => mod._cuckoo_insert_or_assign(h, kp, vp));
+    }
+    function cuckooRemove(h, key) {
+        return withStr(key, kp => mod._cuckoo_remove(h, kp) === 1);
+    }
+    // Snapshot returns malloc'd JSON — must readAndFree.
+    function cuckooSnapshot(h) {
+        return readAndFree(mod._cuckoo_snapshot(h));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
     //  AvlDictionary
     // ══════════════════════════════════════════════════════════════════════
 
@@ -252,6 +282,10 @@ window.DictoriumInterop = (() => {
         chainingCreate, chainingFree, chainingAdd, chainingInsertOrAssign,
         chainingContains, chainingGet, chainingRemove, chainingClear,
         chainingCount, chainingSnapshot,
+
+        cuckooCreate, cuckooFree, cuckooAdd, cuckooInsertOrAssign,
+        cuckooContains, cuckooGet, cuckooRemove, cuckooClear,
+        cuckooCount, cuckooSnapshot,
 
         avlCreate, avlFree, avlAdd, avlInsertOrAssign,
         avlContains, avlGet, avlRemove, avlClear,

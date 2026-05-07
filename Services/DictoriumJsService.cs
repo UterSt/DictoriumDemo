@@ -305,6 +305,78 @@ public class DictoriumJsService(IJSRuntime js)
         return ParseSnapshot(json);
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    //  CuckooDictionary<string, string>
+    // ══════════════════════════════════════════════════════════════════════
+
+    public async Task<int> CuckooCreateAsync()
+        => await js.InvokeAsync<int>("DictoriumInterop.cuckooCreate");
+
+    public async Task CuckooFreeAsync(int handle)
+        => await js.InvokeVoidAsync("DictoriumInterop.cuckooFree", handle);
+
+    public async Task<bool> CuckooContainsAsync(int handle, string key)
+        => await js.InvokeAsync<bool>("DictoriumInterop.cuckooContains", handle, key);
+
+    public async Task<string> CuckooGetAsync(int handle, string key)
+        => await js.InvokeAsync<string>("DictoriumInterop.cuckooGet", handle, key) ?? string.Empty;
+
+    public async Task<bool> CuckooAddAsync(int handle, string key, string val)
+        => await js.InvokeAsync<bool>("DictoriumInterop.cuckooAdd", handle, key, val);
+
+    public async Task CuckooInsertOrAssignAsync(int handle, string key, string val)
+        => await js.InvokeVoidAsync("DictoriumInterop.cuckooInsertOrAssign", handle, key, val);
+
+    public async Task<bool> CuckooRemoveAsync(int handle, string key)
+        => await js.InvokeAsync<bool>("DictoriumInterop.cuckooRemove", handle, key);
+
+    public async Task CuckooClearAsync(int handle)
+        => await js.InvokeVoidAsync("DictoriumInterop.cuckooClear", handle);
+
+    public async Task<int> CuckooCountAsync(int handle)
+        => await js.InvokeAsync<int>("DictoriumInterop.cuckooCount", handle);
+
+    /// <summary>
+    /// Returns a snapshot of the CuckooDictionary.
+    ///
+    /// Actual WASM JSON format: [["key","value"], ...]
+    /// A flat array of occupied [key, value] pairs only.
+    /// Table positions (T1/T2) are not exposed by the snapshot.
+    /// </summary>
+    public async Task<CuckooSnapshot> CuckooSnapshotAsync(int handle)
+    {
+        var json = await js.InvokeAsync<string>("DictoriumInterop.cuckooSnapshot", handle);
+        var snap = new CuckooSnapshot { RawJson = json ?? string.Empty };
+        if (string.IsNullOrWhiteSpace(json) || json.Trim() == "[]") return snap;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root      = doc.RootElement;
+
+            // Actual format: [[key, value], ...]  — flat list of occupied pairs
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                int idx = 0;
+                foreach (var el in root.EnumerateArray())
+                {
+                    if (el.ValueKind != JsonValueKind.Array) continue;
+                    var arr = el.EnumerateArray().ToArray();
+                    if (arr.Length < 2) continue;
+                    snap.Entries.Add(new CuckooSlot
+                    {
+                        Index = idx++,
+                        State = CuckooSlotState.Occupied,
+                        Key   = arr[0].GetString() ?? "",
+                        Value = arr[1].GetString() ?? "",
+                    });
+                }
+            }
+            snap.Count = snap.Entries.Count;
+        }
+        catch (Exception ex) { snap.ParseError = ex.Message; }
+        return snap;
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static List<DictItem> ParseSnapshot(string json)
@@ -329,7 +401,39 @@ public class ChainBucket
     public List<DictItem> Chain { get; set; } = new();
 }
 
-// ── LinearProbing models ──────────────────────────────────────────────────────
+
+// ── CuckooDictionary models ──────────────────────────────────────────────────
+
+public enum CuckooSlotState { Empty, Occupied }
+
+public class CuckooSlot
+{
+    public int             Index { get; set; }
+    public CuckooSlotState State { get; set; }
+    public string          Key   { get; set; } = string.Empty;
+    public string          Value { get; set; } = string.Empty;
+}
+
+public class CuckooSnapshot
+{
+    public int              Capacity   { get; set; }
+    public int              Count      { get; set; }
+    /// <summary>Occupied entries from the flat [[key,value],...] snapshot.</summary>
+    public List<CuckooSlot> Entries    { get; set; } = new();
+    public string           RawJson    { get; set; } = string.Empty;
+    public string           ParseError { get; set; } = string.Empty;
+
+    // T1/T2 are aliases for backward-compat and highlight logic.
+    // The WASM snapshot doesn't expose table positions, so all entries live in Entries.
+    public List<CuckooSlot> T1 => Entries;
+    public List<CuckooSlot> T2 => new();   // always empty — not available from WASM
+
+    public double LoadFactor => Count > 0 ? (double)Count / Math.Max(Count * 2, 8) : 0;
+
+    public int FindInT1(string key) =>
+        Entries.FirstOrDefault(s => s.State == CuckooSlotState.Occupied && s.Key == key)?.Index ?? -1;
+    public int FindInT2(string key) => -1;   // T2 positions not available from snapshot
+}
 
 public enum LpSlotState { Empty, Occupied, Deleted }
 

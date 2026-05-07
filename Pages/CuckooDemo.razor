@@ -1,0 +1,718 @@
+@page "/demo/cuckoo"
+@inject DictoriumJsService Dtr
+
+<PageTitle>CuckooDictionary — Демо — Dictorium</PageTitle>
+
+<div class="page-wrap">
+
+    <div class="breadcrumb">
+        <a href="">Обзор</a> <span class="bc-sep">›</span>
+        <a href="structure/open-hashing">Хэш-таблицы</a> <span class="bc-sep">›</span>
+        <span class="bc-now">CuckooDictionary [LIVE]</span>
+    </div>
+
+    <div class="struct-head-bar">
+        <div class="struct-issue-num" style="color:var(--acc-g)">
+            dtr::CuckooDictionary&lt;string,string&gt; — реальная Dictorium через WASM
+        </div>
+        <h1 class="struct-h1">Кукушкино хэширование</h1>
+        <div class="struct-en">CuckooDictionary.h · O(1) worst-case lookup · две таблицы · два независимых хэша</div>
+        <p class="struct-description">
+            Два массива <strong>T1</strong> и <strong>T2</strong>, каждый ёмкостью <em>capacity</em> слотов,
+            и два независимых хэша <code>h1</code>, <code>h2</code>.
+            <strong>Lookup</strong> всегда проверяет ровно два слота — O(1) worst-case.
+            <strong>Insert</strong> кладёт ключ в <code>T1[h1(k)]</code>; если занят —
+            вытесняет жильца «кукушкой» в альтернативную таблицу, пока не найдётся свободный слот.
+        </p>
+        <div class="struct-tags">
+            <span class="s-tag">ContainsKey O(1) worst</span>
+            <span class="s-tag">Add O(1) amortized</span>
+            <span class="s-tag">Remove O(1)</span>
+            @if (_wasmReady)
+            { <span class="s-tag" style="color:var(--acc-g);border-color:var(--acc-g)">● WASM готов</span> }
+            else
+            { <span class="s-tag" style="color:var(--acc-r)">○ Загрузка WASM...</span> }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="demo-status @_statusCls"><strong>@_statusIcon</strong>&nbsp; @_status</div>
+    }
+
+    @if (!_wasmReady)
+    {
+        <div class="comp-hint">Загрузка WebAssembly модуля Dictorium...</div>
+    }
+    else
+    {
+    <div class="demo-layout">
+
+        <!-- ── Controls ── -->
+        <div class="demo-controls">
+            <div class="ctrl-section">
+                <div class="ctrl-section-title">Ключ (Key)</div>
+                <input class="search-input" style="width:100%;" @bind="_keyInput" @bind:event="oninput"
+                       placeholder="apple" disabled="@_busy" />
+                <div class="ctrl-section-title" style="margin-top:6px;">Значение (Value)</div>
+                <input class="search-input" style="width:100%;margin-bottom:0;" @bind="_valInput" @bind:event="oninput"
+                       placeholder="яблоко" disabled="@_busy" />
+            </div>
+
+            <div class="ctrl-ops">
+                <button class="btn-op btn-search" @onclick="DoContains"
+                        disabled="@(_busy||string.IsNullOrWhiteSpace(_keyInput))">▶ ContainsKey(key)</button>
+                <button class="btn-op btn-search" @onclick="DoGet"
+                        disabled="@(_busy||string.IsNullOrWhiteSpace(_keyInput))">▶ TryGetValue(key)</button>
+                <button class="btn-op btn-add" @onclick="DoAdd"
+                        disabled="@(_busy||string.IsNullOrWhiteSpace(_keyInput)||string.IsNullOrWhiteSpace(_valInput))">+ Add(key, value)</button>
+                <button class="btn-op btn-add" @onclick="DoInsertOrAssign"
+                        disabled="@(_busy||string.IsNullOrWhiteSpace(_keyInput)||string.IsNullOrWhiteSpace(_valInput))">± InsertOrAssign(key,value)</button>
+                <button class="btn-op btn-remove" @onclick="DoRemove"
+                        disabled="@(_busy||string.IsNullOrWhiteSpace(_keyInput))">− Remove(key)</button>
+                <button class="btn-op btn-clear" @onclick="DoClear" disabled="@_busy">⊘ Clear()</button>
+            </div>
+
+            <div class="ctrl-info">
+                <div class="ctrl-info-row"><span>Count()</span><span class="ctrl-info-val">@_snap.Count</span></div>
+                <div class="ctrl-info-row"><span>Capacity (на табл.)</span><span class="ctrl-info-val">@VisualCapacity</span></div>
+                <div class="ctrl-info-row"><span>Результат</span><span class="ctrl-info-val">@_result</span></div>
+            </div>
+
+            <div class="ctrl-legend">
+                <div class="legend-title">Легенда</div>
+                <div class="legend-row"><span class="ph-step-dot step2"></span> T1 — пусто</div>
+                <div class="legend-row"><span class="ph-step-dot step2" style="background:#c0ccff"></span> T1 — занят</div>
+                <div class="legend-row"><span class="ph-step-dot step3"></span> T2 — пусто</div>
+                <div class="legend-row"><span class="ph-step-dot step3" style="background:#d8b8ff"></span> T2 — занят</div>
+                <div class="legend-row"><span class="ph-step-dot step1"></span> Проверяемый слот</div>
+                <div class="legend-row"><span class="ph-step-dot step-ok"></span> Найдено / вставлено</div>
+                <div class="legend-row"><span class="ph-step-dot" style="background:#ffeeee;border-color:#cc0000"></span> Не найдено / удалено</div>
+            </div>
+
+            <div class="ctrl-section">
+                <div class="ctrl-section-title">Пример</div>
+                <button class="btn-op" @onclick="LoadSample" disabled="@_busy" style="font-size:10px;">
+                    ↓ Загрузить 8 пар
+                </button>
+            </div>
+        </div>
+
+        <!-- ── Main visual ── -->
+        <div class="demo-main">
+
+            <!-- T1 table -->
+            <div class="viz-section">
+                <div class="viz-section-head">
+                    <span class="viz-section-title">T1 — Таблица 1 &nbsp;<code style="font-size:10px;font-weight:normal">h1(key) = fnv1a(key) % capacity</code></span>
+                    <span class="viz-section-info">
+                        @_t1.Count(s => s.Occupied) / @_t1.Count занято
+                    </span>
+                </div>
+                <div class="ck-table-row-wrap">
+                    @foreach (var slot in _t1)
+                    {
+                        string cls = GetSlotCls(slot, 1);
+                        <div class="ck-slot @cls" title="@(slot.Occupied ? slot.Key+"→"+slot.Value : "пусто")">
+                            <div class="ck-slot-idx">[@slot.Idx]</div>
+                            @if (slot.Occupied)
+                            {
+                                <div class="ck-slot-key">@TruncStr(slot.Key, 9)</div>
+                                <div class="ck-slot-arrow">→</div>
+                                <div class="ck-slot-val">@TruncStr(slot.Value, 9)</div>
+                            }
+                            else
+                            {
+                                <div class="ck-slot-empty">—</div>
+                            }
+                            @if (_hlLabel.TryGetValue(($"t1", slot.Idx), out var lbl))
+                            {
+                                <div class="ck-slot-badge">@lbl</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- T2 table -->
+            <div class="viz-section">
+                <div class="viz-section-head">
+                    <span class="viz-section-title">T2 — Таблица 2 &nbsp;<code style="font-size:10px;font-weight:normal">h2(key) = fnv1a_mix(key) % capacity</code></span>
+                    <span class="viz-section-info">
+                        @_t2.Count(s => s.Occupied) / @_t2.Count занято
+                    </span>
+                </div>
+                <div class="ck-table-row-wrap">
+                    @foreach (var slot in _t2)
+                    {
+                        string cls = GetSlotCls(slot, 2);
+                        <div class="ck-slot @cls" title="@(slot.Occupied ? slot.Key+"→"+slot.Value : "пусто")">
+                            <div class="ck-slot-idx">[@slot.Idx]</div>
+                            @if (slot.Occupied)
+                            {
+                                <div class="ck-slot-key">@TruncStr(slot.Key, 9)</div>
+                                <div class="ck-slot-arrow">→</div>
+                                <div class="ck-slot-val">@TruncStr(slot.Value, 9)</div>
+                            }
+                            else
+                            {
+                                <div class="ck-slot-empty">—</div>
+                            }
+                            @if (_hlLabel.TryGetValue(($"t2", slot.Idx), out var lbl2))
+                            {
+                                <div class="ck-slot-badge">@lbl2</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Step trace panel -->
+            @if (_steps.Count > 0)
+            {
+                <div class="ph-steps-panel" style="margin-top:4px;">
+                    <div class="op-panel-head">
+                        Трасса алгоритма — шаг @(_currentStep + 1)/@_steps.Count
+                    </div>
+                    @foreach (var (step, si) in _steps.Select((s, i) => (s, i)))
+                    {
+                        string scls = si == _currentStep ? "ph-step ph-step-active"
+                                    : si <  _currentStep ? "ph-step ph-step-done"
+                                                         : "ph-step ph-step-pending";
+                        <div class="@scls">
+                            <span class="ph-step-num">@(si + 1)</span>
+                            <span>@step.Text</span>
+                        </div>
+                    }
+                </div>
+            }
+
+            <!-- Log -->
+            <div class="op-panel" style="margin-top:8px;">
+                <div class="op-panel-head" style="display:flex;justify-content:space-between;align-items:center;">
+                    <span>Лог операций Dictorium WASM</span>
+                    <button class="btn-op btn-clear" style="padding:1px 6px;font-size:10px;width:auto;" @onclick="ClearLog">очистить</button>
+                </div>
+                <div class="demo-log">
+                    @if (_log.Count == 0)
+                    { <div class="log-line log-miss">// нет операций</div> }
+                    @for (int li = _log.Count - 1; li >= 0; li--)
+                    { <div class="log-line @_log[li].Cls">@_log[li].Text</div> }
+                </div>
+            </div>
+        </div>
+    </div>
+    }
+</div>
+
+<style>
+/* ── Cuckoo slot grid ── */
+.ck-table-row-wrap {
+    display: flex; flex-wrap: wrap; gap: 3px;
+    padding: 8px 10px 6px;
+    overflow-x: auto;
+}
+
+.ck-slot {
+    border: 1px solid #8899cc;
+    background: #eef2ff;
+    min-width: 82px; max-width: 120px;
+    padding: 4px 5px 3px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    position: relative;
+    text-align: center;
+    transition: background .2s, border-color .2s, box-shadow .2s;
+    cursor: default;
+    flex: 0 0 auto;
+}
+/* T2 base colour */
+.ck-slot.ck-t2 { background: #f2eeff; border-color: #9966bb; }
+
+.ck-slot.ck-empty { background: var(--bg-alt); border-color: var(--border); }
+.ck-slot.ck-t2.ck-empty { background: var(--bg-alt); border-color: var(--border); }
+
+.ck-slot.ck-probe {
+    background: #fffbe0; border-color: #b88810;
+    box-shadow: 0 0 0 2px #b88810;
+}
+.ck-slot.ck-found {
+    background: #e0ffe8; border-color: var(--acc-g);
+    box-shadow: 0 0 0 2px var(--acc-g);
+}
+.ck-slot.ck-miss {
+    background: #ffeeee; border-color: var(--acc-r);
+    box-shadow: 0 0 0 2px var(--acc-r);
+}
+
+.ck-slot-idx   { font-size: 9px; color: var(--text-3); margin-bottom: 2px; }
+.ck-slot-key   { font-weight: bold; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ck-slot-arrow { color: var(--text-3); font-size: 9px; }
+.ck-slot-val   { color: var(--acc-b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ck-slot-empty { color: var(--text-3); font-style: italic; padding: 6px 0; }
+.ck-slot-badge {
+    position: absolute; top: 2px; right: 2px;
+    font-size: 8px; padding: 0 3px;
+    background: var(--acc-g); color: #fff;
+    font-family: var(--font-ui);
+    white-space: nowrap;
+}
+</style>
+
+@code {
+    // ── State ─────────────────────────────────────────────────────────────────
+    private bool _wasmReady;
+    private bool _busy;
+    private int  _handle = -1;
+
+    private CuckooSnapshot _snap = new();
+    private List<CkSlot>   _t1   = new();
+    private List<CkSlot>   _t2   = new();
+
+    // Persistent highlights: (table "t1"/"t2", slotIdx) → css class suffix
+    private Dictionary<(string, int), string> _hlCls   = new();
+    private Dictionary<(string, int), string> _hlLabel = new();
+
+    private string _keyInput   = string.Empty;
+    private string _valInput   = string.Empty;
+    private string _status     = string.Empty;
+    private string _statusCls  = string.Empty;
+    private string _statusIcon = string.Empty;
+    private string _result     = "—";
+
+    private List<TraceStep> _steps       = new();
+    private int             _currentStep = -1;
+
+    private readonly List<LogEntry> _log = new();
+    private class LogEntry { public string Text; public string Cls; public LogEntry(string t, string c){Text=t;Cls=c;} }
+    private class TraceStep { public string Text; public TraceStep(string t){Text=t;} }
+
+    private const int StepMs = 900;
+
+    // ── Computed capacity for visualization ───────────────────────────────────
+    private int VisualCapacity => NextPow2(Math.Max(_snap.Count, 1) * 2, 8);
+    private static int NextPow2(int n, int min = 1)
+    {
+        int p = min;
+        while (p < n) p <<= 1;
+        return p;
+    }
+
+    // ── Two independent hash functions (FNV-1a variants) ─────────────────────
+    private static int SimH1(string key, int cap)
+    {
+        uint h = 2166136261u;
+        foreach (char c in key) { h ^= c; h *= 16777619u; }
+        return (int)(h % (uint)cap);
+    }
+    private static int SimH2(string key, int cap)
+    {
+        uint h = 2166136261u ^ 0x5bd1e995u;
+        foreach (char c in key) { h ^= c; h *= 16777619u; h += 0x27d4eb2du; }
+        return (int)(h % (uint)cap);
+    }
+
+    // ── Rebuild the visual T1/T2 tables from snapshot entries ─────────────────
+    private void RebuildTables()
+    {
+        int cap = VisualCapacity;
+        _t1 = Enumerable.Range(0, cap).Select(i => new CkSlot { Idx = i, Table = 1 }).ToList();
+        _t2 = Enumerable.Range(0, cap).Select(i => new CkSlot { Idx = i, Table = 2 }).ToList();
+
+        foreach (var entry in _snap.Entries)
+        {
+            int s1 = SimH1(entry.Key, cap);
+            int s2 = SimH2(entry.Key, cap);
+
+            if (!_t1[s1].Occupied)
+            {
+                _t1[s1].Key = entry.Key;
+                _t1[s1].Value = entry.Value;
+            }
+            else if (!_t2[s2].Occupied)
+            {
+                _t2[s2].Key = entry.Key;
+                _t2[s2].Value = entry.Value;
+            }
+            else
+            {
+                // Simulation collision — do a simple linear probe to find any free slot
+                bool placed = false;
+                for (int i = 0; i < cap && !placed; i++)
+                    if (!_t1[i].Occupied) { _t1[i].Key = entry.Key; _t1[i].Value = entry.Value; placed = true; }
+                if (!placed)
+                    for (int i = 0; i < cap && !placed; i++)
+                        if (!_t2[i].Occupied) { _t2[i].Key = entry.Key; _t2[i].Value = entry.Value; placed = true; }
+            }
+        }
+    }
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Dtr.InitAsync();
+        _handle    = await Dtr.CuckooCreateAsync();
+        _snap      = await Dtr.CuckooSnapshotAsync(_handle);
+        RebuildTables();
+        _wasmReady = true;
+        StateHasChanged();
+    }
+
+    // ── Operations ────────────────────────────────────────────────────────────
+
+    private async Task DoContains()
+    {
+        _busy = true; ClearHighlights(); _steps.Clear();
+        var key = _keyInput.Trim();
+        int cap = VisualCapacity;
+        int s1  = SimH1(key, cap);
+        int s2  = SimH2(key, cap);
+        bool t1hit = _t1[s1].Occupied && _t1[s1].Key == key;
+        bool t2hit = _t2[s2].Occupied && _t2[s2].Key == key;
+
+        _steps = BuildContainsSteps(key, s1, s2, t1hit, t2hit);
+
+        // Animate step by step
+        await ShowStep(0); Mark("t1", s1, t1hit ? "found" : "probe", t1hit ? "h1" : "h1?");
+        await ShowStep(1);
+
+        if (t1hit) goto done;
+        _hlCls.Remove(("t1", s1)); _hlLabel.Remove(("t1", s1));
+
+        await ShowStep(2); Mark("t2", s2, t2hit ? "found" : "probe", t2hit ? "h2" : "h2?");
+        await ShowStep(3);
+
+        done:
+        bool found = await Dtr.CuckooContainsAsync(_handle, key);
+        await ShowStep(4);
+
+        // Persistent highlight
+        ClearHighlights();
+        string finalCls = found ? "found" : "miss";
+        if (t1hit) Mark("t1", s1, finalCls, found ? "✓" : "✗");
+        else       Mark("t2", s2, finalCls, found ? "✓" : "✗");
+
+        SetStatus($"ContainsKey(\"{key}\") → {found}", found ? "status-ok" : "status-err", found ? "✓" : "✗");
+        _result = found ? "true" : "false";
+        Log($"> ContainsKey(\"{key}\") → {found}  [T1[{s1}], T2[{s2}]]", found ? "log-ok" : "log-miss");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoGet()
+    {
+        _busy = true; ClearHighlights(); _steps.Clear();
+        var key = _keyInput.Trim();
+        int cap = VisualCapacity;
+        int s1  = SimH1(key, cap);
+        int s2  = SimH2(key, cap);
+        bool t1hit = _t1[s1].Occupied && _t1[s1].Key == key;
+        bool t2hit = _t2[s2].Occupied && _t2[s2].Key == key;
+
+        _steps = BuildGetSteps(key, s1, s2, t1hit, t2hit);
+
+        await ShowStep(0); Mark("t1", s1, t1hit ? "found" : "probe", "h1");
+        await ShowStep(1);
+
+        if (!t1hit)
+        {
+            _hlCls.Remove(("t1", s1)); _hlLabel.Remove(("t1", s1));
+            await ShowStep(2); Mark("t2", s2, t2hit ? "found" : "probe", "h2");
+            await ShowStep(3);
+        }
+
+        string val = await Dtr.CuckooGetAsync(_handle, key);
+        bool found = !string.IsNullOrEmpty(val);
+        await ShowStep(4);
+
+        ClearHighlights();
+        if (t1hit) Mark("t1", s1, found ? "found" : "miss", found ? "✓" : "✗");
+        else       Mark("t2", s2, found ? "found" : "miss", found ? "✓" : "✗");
+
+        SetStatus(found ? $"TryGetValue(\"{key}\") → \"{val}\"" : $"TryGetValue(\"{key}\") → не найдено",
+                  found ? "status-ok" : "status-err", found ? "✓" : "✗");
+        _result = found ? $"\"{val}\"" : "не найдено";
+        Log($"> TryGetValue(\"{key}\") → {(found ? val : "∅")}  [T1[{s1}], T2[{s2}]]", found ? "log-ok" : "log-miss");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoAdd()
+    {
+        _busy = true; ClearHighlights(); _steps.Clear();
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+        int cap = VisualCapacity;
+        int s1 = SimH1(key, cap);
+        int s2 = SimH2(key, cap);
+        bool s1free = !_t1[s1].Occupied;
+        bool s2free = !_t2[s2].Occupied;
+
+        _steps = BuildAddSteps(key, val, s1, cap);
+
+        await ShowStep(0); Mark("t1", s1, s1free ? "probe" : "probe", "h1");
+        await ShowStep(1);
+
+        if (!s1free && _steps.Count > 3)
+        {
+            int ev = SimH2(_t1[s1].Key, cap);
+            Mark("t2", ev, "probe", "h2↑");
+            await ShowStep(2);
+            await ShowStep(3);
+        }
+
+        bool ok = await Dtr.CuckooAddAsync(_handle, key, val);
+        _snap = await Dtr.CuckooSnapshotAsync(_handle);
+        RebuildTables();
+        await ShowStep(_steps.Count - 1);
+
+        ClearHighlights();
+        if (ok)
+        {
+            // Find where the key actually ended up in our rebuilt tables
+            if (_t1.Any(s => s.Key == key)) Mark("t1", _t1.First(s => s.Key == key).Idx, "found", "new");
+            else if (_t2.Any(s => s.Key == key)) Mark("t2", _t2.First(s => s.Key == key).Idx, "found", "new");
+
+            SetStatus($"Add(\"{key}\", \"{val}\") — вставлено, Count={_snap.Count}", "status-ok", "✓");
+            _result = "вставлено";
+            Log($"> Add(\"{key}\") → ok, Count={_snap.Count}", "log-ok");
+        }
+        else
+        {
+            SetStatus($"Add(\"{key}\") — ключ уже существует", "status-err", "✗");
+            _result = "уже есть";
+            Log($"> Add(\"{key}\") → exists", "log-err");
+        }
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoInsertOrAssign()
+    {
+        _busy = true; ClearHighlights(); _steps.Clear();
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+        int cap = VisualCapacity;
+        int s1  = SimH1(key, cap);
+        int s2  = SimH2(key, cap);
+        bool existed = _snap.Entries.Any(e => e.Key == key);
+
+        _steps = BuildInsertOrAssignSteps(key, val, s1, s2, existed);
+
+        await ShowStep(0); Mark("t1", s1, "probe", "h1"); Mark("t2", s2, "probe", "h2");
+        await ShowStep(1);
+        await Dtr.CuckooInsertOrAssignAsync(_handle, key, val);
+        _snap = await Dtr.CuckooSnapshotAsync(_handle);
+        RebuildTables();
+        await ShowStep(2);
+
+        ClearHighlights();
+        if (_t1.Any(s => s.Key == key)) Mark("t1", _t1.First(s => s.Key == key).Idx, "found", existed ? "upd" : "new");
+        else if (_t2.Any(s => s.Key == key)) Mark("t2", _t2.First(s => s.Key == key).Idx, "found", existed ? "upd" : "new");
+
+        string mode = existed ? "обновлено" : "вставлено";
+        SetStatus($"InsertOrAssign(\"{key}\", \"{val}\") — {mode}", "status-ok", "✓");
+        _result = mode;
+        Log($"> InsertOrAssign(\"{key}\") → {mode}", "log-ok");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoRemove()
+    {
+        _busy = true; ClearHighlights(); _steps.Clear();
+        var key = _keyInput.Trim();
+        int cap = VisualCapacity;
+        int s1  = SimH1(key, cap);
+        int s2  = SimH2(key, cap);
+        bool t1hit = _t1[s1].Occupied && _t1[s1].Key == key;
+        bool t2hit = _t2[s2].Occupied && _t2[s2].Key == key;
+
+        _steps = BuildRemoveSteps(key, s1, s2, t1hit, t2hit);
+
+        await ShowStep(0); Mark("t1", s1, t1hit ? "probe" : "probe", "h1");
+        await ShowStep(1);
+        if (!t1hit) { _hlCls.Remove(("t1", s1)); Mark("t2", s2, t2hit ? "probe" : "probe", "h2"); }
+
+        // Flash miss state before actually removing
+        if (t1hit) { _hlCls[("t1", s1)] = "miss"; _hlLabel[("t1", s1)] = "del"; StateHasChanged(); await Task.Delay(400); }
+        if (t2hit) { _hlCls[("t2", s2)] = "miss"; _hlLabel[("t2", s2)] = "del"; StateHasChanged(); await Task.Delay(400); }
+
+        bool ok = await Dtr.CuckooRemoveAsync(_handle, key);
+        _snap = await Dtr.CuckooSnapshotAsync(_handle);
+        RebuildTables();
+        await ShowStep(ok ? 3 : 3);
+
+        ClearHighlights();
+        SetStatus(ok ? $"Remove(\"{key}\") — удалено" : $"Remove(\"{key}\") — не найдено",
+                  ok ? "status-ok" : "status-err", ok ? "✓" : "✗");
+        _result = ok ? "удалено" : "не найдено";
+        Log($"> Remove(\"{key}\") → {ok}", ok ? "log-ok" : "log-miss");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoClear()
+    {
+        _busy = true; ClearHighlights(); _steps.Clear();
+        await Dtr.CuckooClearAsync(_handle);
+        _snap = await Dtr.CuckooSnapshotAsync(_handle);
+        RebuildTables();
+        SetStatus("Clear() — таблица очищена", "status-ok", "✓");
+        _result = "—";
+        Log("> Clear()", "log-op");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task LoadSample()
+    {
+        _busy = true; ClearHighlights(); _steps.Clear();
+        string[] pairs = {
+            "apple","яблоко","banana","банан",
+            "cherry","вишня","date","финик",
+            "elderberry","бузина","fig","инжир",
+            "grape","виноград","honeydew","дыня",
+        };
+        int added = 0;
+        for (int i = 0; i < pairs.Length; i += 2)
+            if (await Dtr.CuckooAddAsync(_handle, pairs[i], pairs[i+1])) added++;
+        _snap = await Dtr.CuckooSnapshotAsync(_handle);
+        RebuildTables();
+        SetStatus($"Загружено {added} пар · Count={_snap.Count}", "status-ok", "✓");
+        Log($"> Sample: добавлено {added}, Count={_snap.Count}", "log-ok");
+        _busy = false; StateHasChanged();
+    }
+
+    // ── Step helpers ──────────────────────────────────────────────────────────
+
+    private async Task ShowStep(int idx)
+    {
+        _currentStep = idx;
+        StateHasChanged();
+        await Task.Delay(StepMs);
+    }
+
+    private void Mark(string table, int idx, string cls, string label)
+    {
+        _hlCls[(table, idx)]   = cls;
+        _hlLabel[(table, idx)] = label;
+    }
+
+    private void ClearHighlights() { _hlCls.Clear(); _hlLabel.Clear(); }
+
+    private string GetSlotCls(CkSlot slot, int table)
+    {
+        string t = table == 1 ? "t1" : "t2";
+        string tbase = table == 2 ? "ck-t2" : "";
+        if (_hlCls.TryGetValue((t, slot.Idx), out var hl))
+            return $"{tbase} ck-{hl}";
+        return slot.Occupied ? tbase : $"{tbase} ck-empty";
+    }
+
+    private void ClearLog() => _log.Clear();
+
+    private void SetStatus(string msg, string cls, string icon)
+    { _status = msg; _statusCls = cls; _statusIcon = icon; }
+
+    private void Log(string text, string cls)
+    {
+        _log.Add(new LogEntry(text, cls));
+        if (_log.Count > 80) _log.RemoveAt(0);
+    }
+
+    private static string TruncStr(string s, int max) =>
+        s.Length <= max ? s : s[..max] + "…";
+
+
+    // ── Step-trace builder methods ────────────────────────────────────────────
+    // (Extracted to avoid Razor parser issues with " inside interpolated strings)
+
+    private static string Q(string s) => """ + s + """;
+
+    private List<TraceStep> BuildContainsSteps(string key, int s1, int s2, bool t1hit, bool t2hit)
+    {
+        string t1val = _t1[s1].Occupied ? Q(_t1[s1].Key) : "пусто";
+        string t2val = _t2[s2].Occupied ? Q(_t2[s2].Key) : "пусто";
+        return new List<TraceStep>
+        {
+            new("Вычислить h1(" + Q(key) + ") = " + s1 + "  →  проверить T1[" + s1 + "]"),
+            new("T1[" + s1 + "] = " + t1val + "  →  " + (t1hit ? "✓ совпадение!" : "не совпадает — идём в T2")),
+            new("Вычислить h2(" + Q(key) + ") = " + s2 + "  →  проверить T2[" + s2 + "]"),
+            new("T2[" + s2 + "] = " + t2val + "  →  " + (t2hit ? "✓ совпадение!" : "не найдено")),
+            new("Результат: ContainsKey(" + key + ") = " + (t1hit || t2hit) + " — всего 2 обращения к памяти"),
+        };
+    }
+
+    private List<TraceStep> BuildGetSteps(string key, int s1, int s2, bool t1hit, bool t2hit)
+    {
+        string t1val = _t1[s1].Occupied ? Q(_t1[s1].Key) : "пусто";
+        string t2val = _t2[s2].Occupied ? Q(_t2[s2].Key) : "пусто";
+        return new List<TraceStep>
+        {
+            new("Вычислить h1(" + Q(key) + ") = " + s1 + "  →  проверить T1[" + s1 + "]"),
+            new("T1[" + s1 + "] = " + t1val + "  →  " + (t1hit ? "✓ совпадение!" : "не совпадает — идём в T2")),
+            new("Вычислить h2(" + Q(key) + ") = " + s2 + "  →  проверить T2[" + s2 + "]"),
+            new("T2[" + s2 + "] = " + t2val + "  →  " + (t2hit ? "✓ совпадение!" : "не найдено")),
+            new("Возвращаем значение — O(1) worst-case: ровно 2 слота проверено"),
+        };
+    }
+
+    private List<TraceStep> BuildAddSteps(string key, string val, int s1, int cap)
+    {
+        var steps = new List<TraceStep>();
+        steps.Add(new("Вычислить h1(" + Q(key) + ") = " + s1 + "  →  проверить T1[" + s1 + "]"));
+        if (!_t1[s1].Occupied)
+        {
+            steps.Add(new("T1[" + s1 + "] = пусто  →  вставить " + Q(key) + " прямо сюда"));
+            steps.Add(new("Вставлен: T1[" + s1 + "] = " + Q(key) + " → " + Q(val)));
+        }
+        else
+        {
+            string evicted = _t1[s1].Key;
+            int ev2 = SimH2(evicted, cap);
+            steps.Add(new("T1[" + s1 + "] занят ключом " + Q(evicted) + "  →  вытесняем кукушкой"));
+            steps.Add(new("Вычислить h2(" + Q(evicted) + ") = " + ev2 + "  →  проверить T2[" + ev2 + "]"));
+            if (!_t2[ev2].Occupied)
+                steps.Add(new("T2[" + ev2 + "] = пусто  →  " + Q(evicted) + " уходит в T2[" + ev2 + "], " + Q(key) + " → T1[" + s1 + "]"));
+            else
+                steps.Add(new("T2[" + ev2 + "] тоже занят  →  продолжаем цепочку вытеснений..."));
+            steps.Add(new("Финал: " + Q(key) + " вставлен (WASM завершил цепочку)"));
+        }
+        return steps;
+    }
+
+    private List<TraceStep> BuildInsertOrAssignSteps(string key, string val, int s1, int s2, bool existed)
+    {
+        return new List<TraceStep>
+        {
+            new("Вычислить h1(" + Q(key) + ") = " + s1 + "  и  h2(" + Q(key) + ") = " + s2),
+            new(existed
+                ? ("Ключ " + Q(key) + " уже есть в таблице  →  обновляем значение")
+                : ("Ключ " + Q(key) + " не найден  →  вставляем как в Add")),
+            new("InsertOrAssign выполнен: " + Q(key) + " → " + Q(val)),
+        };
+    }
+
+    private List<TraceStep> BuildRemoveSteps(string key, int s1, int s2, bool t1hit, bool t2hit)
+    {
+        string t1val = _t1[s1].Occupied ? Q(_t1[s1].Key) : "пусто";
+        return new List<TraceStep>
+        {
+            new("Вычислить h1(" + Q(key) + ") = " + s1 + "  →  T1[" + s1 + "] = " + t1val),
+            new(t1hit ? ("✓ Найден в T1[" + s1 + "]  →  удаляем")
+                      : ("T1[" + s1 + "] не совпадает  →  проверяем T2[" + s2 + "]")),
+            new(t2hit ? ("✓ Найден в T2[" + s2 + "]  →  удаляем")
+                      : (t1hit ? "(T2 не нужна)" : ("T2[" + s2 + "] тоже не совпадает  →  ключ не найден"))),
+            new((t1hit || t2hit)
+                ? ("Remove(" + Q(key) + ") = true, Count=" + (_snap.Count - 1))
+                : ("Remove(" + Q(key) + ") = false, ключ отсутствует")),
+        };
+    }
+
+    // ── Inner types ───────────────────────────────────────────────────────────
+
+    private class CkSlot
+    {
+        public int    Idx   { get; set; }
+        public int    Table { get; set; }
+        public string Key   { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+        public bool   Occupied => !string.IsNullOrEmpty(Key);
+    }
+}
