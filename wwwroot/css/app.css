@@ -815,3 +815,351 @@ table { border-spacing: 0; }
 
 .comp-link:hover { background: #bbbbbb; border-style: inset; color: var(--text); text-decoration: none; }
 .comp-link:visited { color: var(--text); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   UI IMPROVEMENTS — added on top of original design system
+   Same retro aesthetic, better usability
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Hero enhancements ──────────────────────────────────────────── */
+.hero-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.hero-badge-live {
+  color: #228822 !important;
+  border-color: #228822 !important;
+  background: #eeffee !important;
+}
+
+.hero-cta-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.btn-hero-primary {
+  display: inline-block;
+  background: var(--bg-nav);
+  border: 2px outset #3a5a9e;
+  padding: 6px 18px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: bold;
+  color: #ffffff;
+  text-decoration: none;
+  letter-spacing: 0.3px;
+}
+
+.btn-hero-primary:hover {
+  background: var(--bg-subnav);
+  border-style: inset;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.btn-hero-primary:visited { color: #ffffff; }
+
+.btn-hero-secondary {
+  display: inline-block;
+  background: #cccccc;
+  border: 2px outset #aaaaaa;
+  padding: 6px 16px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: #111111;
+  text-decoration: none;
+}
+
+.btn-hero-secondary:hover {
+  background: #bbbbbb;
+  border-style: inset;
+  color: #111111;
+  text-decoration: none;
+}
+
+.btn-hero-secondary:visited { color: #111111; }
+
+/* ── How-to strip ───────────────────────────────────────────────── */
+.howto-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  background: var(--bg-alt);
+  border-bottom: 2px solid var(--border-dk);
+  padding: 10px 18px;
+}
+
+.howto-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 1 1 180px;
+  padding: 4px 10px;
+}
+
+.howto-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: var(--bg-nav);
+  color: #ffffff;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: bold;
+  border-radius: 0;
+  flex-shrink: 0;
+  border: 1px solid #0a2a5e;
+}
+
+.howto-text {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+.howto-arrow {
+  font-size: 20px;
+  color: var(--border-dk);
+  padding: 0 4px;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* ── Prominent search section ───────────────────────────────────── */
+.search-section {
+  border-bottom: 2px solid var(--border-dk);
+  background: var(--bg-alt);
+  padding: 12px 18px;
+}
+
+.search-section-inner {
+  max-width: 600px;
+}
+
+.search-main-label {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: bold;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 5px;
+}
+
+.search-main-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.search-main-input {
+  flex: 1;
+  border: 2px inset #888888;
+  padding: 5px 10px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  min-width: 0;
+}
+
+.search-main-input:focus {
+  outline: 2px solid var(--bg-nav);
+  outline-offset: 1px;
+}
+
+.search-clear-btn {
+  background: #cccccc;
+  border: 2px outset #aaaaaa;
+  padding: 4px 10px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--acc-r);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.search-clear-btn:hover {
+  background: var(--acc-r);
+  color: #ffffff;
+  border-style: inset;
+}
+
+.search-result-count {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 5px;
+}
+
+/* ── Empty search state ─────────────────────────────────────────── */
+.search-empty {
+  text-align: center;
+  padding: 32px 20px;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  color: var(--text-2);
+  font-family: var(--font-serif);
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.search-empty-icon {
+  display: block;
+  font-size: 30px;
+  margin-bottom: 10px;
+}
+
+.search-empty-hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 6px;
+}
+
+/* ── Card expand hint ───────────────────────────────────────────── */
+.card-expand-hint {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: var(--bg-nav);
+  font-weight: bold;
+}
+
+/* ── Live demo button (small, in table) ─────────────────────────── */
+.tr-demo-link {
+  white-space: nowrap;
+}
+
+.btn-live-small {
+  display: inline-block;
+  background: var(--bg-nav);
+  border: 1px outset #3a5a9e;
+  padding: 2px 8px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: bold;
+  color: #ffffff;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btn-live-small:hover {
+  background: var(--bg-subnav);
+  border-style: inset;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.btn-live-small:visited { color: #ffffff; }
+
+.demo-soon {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+  font-style: italic;
+}
+
+/* ── Count badge ────────────────────────────────────────────────── */
+.all-count-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  background: var(--bg-alt);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ── Topbar tagline ─────────────────────────────────────────────── */
+.topbar-tagline {
+  display: none;
+  align-items: center;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: #99bbcc;
+  padding: 0 10px;
+  flex: 1;
+}
+
+@media (min-width: 700px) {
+  .topbar-tagline {
+    display: flex;
+  }
+}
+
+/* ── Demo banner (shown on /demo/* pages) ───────────────────────── */
+.demo-banner {
+  background: #001144;
+  color: #aaccee;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  padding: 5px 18px;
+  border-bottom: 1px solid #3a5a9e;
+}
+
+.demo-banner-dot {
+  color: #4ade80;
+  margin-right: 4px;
+  font-size: 9px;
+}
+
+/* ── Footer link ────────────────────────────────────────────────── */
+.footer-link {
+  color: #99aabb;
+  text-decoration: none;
+}
+
+.footer-link:hover {
+  color: #ccdcee;
+  text-decoration: underline;
+}
+
+.footer-structs {
+  opacity: 0.6;
+}
+
+/* ── Accessible focus rings ─────────────────────────────────────── */
+.nav-link:focus-visible,
+.btn-classic:focus-visible,
+.btn-hero-primary:focus-visible,
+.btn-hero-secondary:focus-visible,
+.btn-live-small:focus-visible {
+  outline: 2px solid #ffcc00;
+  outline-offset: 2px;
+}
+
+/* ── Table row cursor hint ──────────────────────────────────────── */
+.data-table tbody tr {
+  cursor: pointer;
+}
+
+/* ── LinearDictionary note ──────────────────────────────────────── */
+.linear-demo-note {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  padding: 8px 12px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.linear-demo-icon {
+  font-weight: bold;
+  color: var(--bg-subnav);
+  font-size: 14px;
+  margin-right: 2px;
+}

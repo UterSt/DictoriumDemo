@@ -9,6 +9,9 @@
                 Dictorium
                 <span class="brand-demo">demo</span>
             </a>
+            <div class="topbar-tagline">
+                Интерактивная визуализация структур данных на C++ / WebAssembly
+            </div>
             <div class="topbar-right">
                 <a href="https://github.com/UterSt" target="_blank" class="gh-link">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
@@ -20,55 +23,80 @@
         </div>
     </header>
 
-    <nav class="main-nav">
-        <a href="" class="nav-link @(IsActive("") ? "active" : "")">Обзор</a>
-        <a href="compare" class="nav-link @(IsActive("compare") ? "active" : "")">Сравнение</a>
-        <span class="nav-sep">&#124;</span>
-        <span class="nav-label">&#9654; LIVE:</span>
+    <nav class="main-nav" aria-label="Основная навигация">
+        <a href="" class="nav-link @(IsActive("") ? "active" : "")"
+           title="Главная страница с обзором всех структур">Обзор</a>
+        <a href="compare" class="nav-link @(IsActive("compare") ? "active" : "")"
+           title="Сравнение характеристик нескольких структур">Сравнение</a>
+
+        <span class="nav-sep">|</span>
+        <span class="nav-label" title="Запустить алгоритм прямо в браузере">▶ LIVE:</span>
+
         <a href="demo/linear"
-           class="nav-link nav-demo @(IsActive("demo/linear") ? "active" : "")">
-            LinearDictionary
+           class="nav-link nav-demo @(IsActive("demo/linear") ? "active" : "")"
+           title="LinearDictionary — простой последовательный словарь">
+            Linear
         </a>
         <a href="demo/lp"
-           class="nav-link nav-demo @(IsActive("demo/lp") ? "active" : "")">
-            LinearProbing
+           class="nav-link nav-demo @(IsActive("demo/lp") ? "active" : "")"
+           title="LinearProbingDictionary — открытая адресация">
+            LinProbing
         </a>
         <a href="demo/chaining"
-           class="nav-link nav-demo @(IsActive("demo/chaining") ? "active" : "")">
-            ChainingDict
+           class="nav-link nav-demo @(IsActive("demo/chaining") ? "active" : "")"
+           title="ChainingDictionary — метод цепочек (Открытое хеширование)">
+            Chaining
         </a>
         <a href="demo/perfecthash"
-           class="nav-link nav-demo @(IsActive("demo/perfecthash") ? "active" : "")">
-            PerfectHash #12
+           class="nav-link nav-demo @(IsActive("demo/perfecthash") ? "active" : "")"
+           title="PerfectHashDictionary — совершенное хеширование O(1)">
+            PerfectHash
         </a>
         <a href="demo/avl"
-           class="nav-link nav-demo @(IsActive("demo/avl") ? "active" : "")">
-            AvlDictionary
+           class="nav-link nav-demo @(IsActive("demo/avl") ? "active" : "")"
+           title="AvlDictionary — сбалансированное AVL-дерево">
+            AVL Tree
         </a>
         <a href="demo/cuckoo"
-           class="nav-link nav-demo @(IsActive("demo/cuckoo") ? "active" : "")">
-            CuckooDict
+           class="nav-link nav-demo @(IsActive("demo/cuckoo") ? "active" : "")"
+           title="CuckooDictionary — кукушкино хеширование O(1)">
+            Cuckoo
         </a>
     </nav>
+
+    @if (IsOnDemoPage())
+    {
+        <div class="demo-banner">
+            <span class="demo-banner-dot">●</span>
+            Интерактивный режим — библиотека Dictorium запущена в WebAssembly.
+            Вводите ключи и значения, нажимайте кнопки и наблюдайте за структурой.
+        </div>
+    }
 
     <main class="main-content">
         @Body
     </main>
 
     <footer class="app-footer">
-        Dictorium Demo &nbsp;&middot;&nbsp;
-        Библиотека <strong>Dictorium</strong> (C++) скомпилирована в WebAssembly через Emscripten &nbsp;&middot;&nbsp;
-        JSInterop: LinearDictionary · LinearProbingDictionary · ChainingDictionary · PerfectHashDictionary · AvlDictionary · CuckooDictionary
+        <strong>Dictorium Demo</strong> &nbsp;&middot;&nbsp;
+        C++ → WebAssembly (Emscripten) &nbsp;&middot;&nbsp;
+        <span class="footer-structs">Linear · LinearProbing · Chaining · PerfectHash · AVL · Cuckoo</span>
+        &nbsp;&middot;&nbsp;
+        <a href="https://github.com/UterSt" target="_blank" class="footer-link">GitHub</a>
     </footer>
 </div>
 
 @code {
-    // Nav.ToBaseRelativePath strips the base prefix (e.g. "/DictoriumDemo/")
-    // so we always compare against paths WITHOUT a leading slash.
     private bool IsActive(string href)
     {
         var current = Nav.ToBaseRelativePath(Nav.Uri);
         if (href == "") return current is "" or "/";
         return current.StartsWith(href);
+    }
+
+    private bool IsOnDemoPage()
+    {
+        var current = Nav.ToBaseRelativePath(Nav.Uri);
+        return current.StartsWith("demo/");
     }
 }

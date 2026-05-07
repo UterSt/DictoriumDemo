@@ -2,17 +2,33 @@
 @inject DataStructureService DS
 @inject NavigationManager Nav
 
-<PageTitle>Dictorium Demo — Структуры данных</PageTitle>
+<PageTitle>Dictorium Demo — Интерактивные структуры данных</PageTitle>
 
 <div class="home-wrap">
 
+    <!-- HERO -->
     <div class="hero-box">
-        <div class="hero-badge">v0.1 &nbsp;&middot;&nbsp; Каркас &nbsp;&middot;&nbsp; Библиотека подключается позже</div>
-        <h1 class="hero-title">Алгоритмы Dictorium</h1>
+        <div class="hero-eyebrow">
+            <span class="hero-badge">C++ → WebAssembly</span>
+            <span class="hero-badge">Dictorium Library</span>
+            <span class="hero-badge hero-badge-live">● Live Demo</span>
+        </div>
+
+        <h1 class="hero-title">Словари и хэш-таблицы — в живую</h1>
+
         <p class="hero-subtitle">
-            Интерактивная демонстрация структур данных библиотеки.<br />
-            Выберите категорию или сравните несколько алгоритмов.
+            <strong>Dictorium</strong> — библиотека словарей на C++, скомпилированная
+            прямо в браузер через WebAssembly.<br />
+            Здесь вы можете <em>запустить</em> каждую структуру, вставить свои данные
+            и пошагово наблюдать, как работают алгоритмы: от линейного поиска
+            до AVL-деревьев и кукушкиного хеширования.
         </p>
+
+        <div class="hero-cta-row">
+            <a href="demo/linear" class="btn-hero-primary">▶ Запустить демо</a>
+            <a href="compare" class="btn-hero-secondary">⊞ Сравнить алгоритмы</a>
+        </div>
+
         <div class="hero-stats">
             @foreach (var cat in _categories)
             {
@@ -24,10 +40,126 @@
         </div>
     </div>
 
+    <!-- КАК ПОЛЬЗОВАТЬСЯ -->
+    <div class="howto-strip">
+        <div class="howto-step">
+            <span class="howto-num">1</span>
+            <span class="howto-text"><strong>Выберите структуру</strong> из каталога ниже или через навигацию</span>
+        </div>
+        <span class="howto-arrow">›</span>
+        <div class="howto-step">
+            <span class="howto-num">2</span>
+            <span class="howto-text"><strong>Перейдите в демо</strong> — кнопка ▶ Live в таблице</span>
+        </div>
+        <span class="howto-arrow">›</span>
+        <div class="howto-step">
+            <span class="howto-num">3</span>
+            <span class="howto-text"><strong>Вставляйте, ищите, удаляйте</strong> данные и смотрите анимацию</span>
+        </div>
+    </div>
+
+    <!-- ПОИСК -->
+    <div class="search-section">
+        <div class="search-section-inner">
+            <label class="search-main-label" for="main-search">🔍 Найти структуру данных</label>
+            <div class="search-main-row">
+                <input id="main-search"
+                       type="text"
+                       placeholder="Например: AVL, линейное, хеш, O(1)..."
+                       @bind="_searchQuery"
+                       @bind:event="oninput"
+                       class="search-main-input"
+                       autocomplete="off" />
+                @if (!string.IsNullOrEmpty(_searchQuery))
+                {
+                    <button class="search-clear-btn" @onclick='() => _searchQuery = ""'>✕ Сброс</button>
+                }
+            </div>
+            @if (!string.IsNullOrEmpty(_searchQuery))
+            {
+                <div class="search-result-count">
+                    Найдено: <strong>@_filteredStructures.Count()</strong>
+                    @(_filteredStructures.Count() == 1 ? "структура" : "структур")
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- РЕЗУЛЬТАТЫ ПОИСКА -->
+    @if (!string.IsNullOrEmpty(_searchQuery))
+    {
+        <div class="section-area">
+            <div class="section-title-row">
+                <h2 class="section-title">Результаты поиска: «@_searchQuery»</h2>
+            </div>
+            @if (!_filteredStructures.Any())
+            {
+                <div class="search-empty">
+                    <span class="search-empty-icon">🔎</span>
+                    <p>Ничего не найдено по запросу <strong>«@_searchQuery»</strong></p>
+                    <p class="search-empty-hint">Попробуйте: AVL, hash, linear, O(1), дерево, хеш</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Название</th>
+                                <th>Категория</th>
+                                <th>Поиск</th>
+                                <th>Вставка</th>
+                                <th>Память</th>
+                                <th>Live demo</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var s in _filteredStructures)
+                            {
+                                var cat = _categories.First(c => c.Id == s.Category);
+                                <tr @onclick='() => Nav.NavigateTo($"structure/{s.Slug}")'
+                                    title="@s.Description">
+                                    <td class="tr-name-b">
+                                        <strong>@s.NameRu</strong>
+                                        <small>@s.Name</small>
+                                    </td>
+                                    <td>
+                                        <span class="cat-pill" style="border-left: 2px solid @cat.AccentColor">
+                                            @cat.NameRu
+                                        </span>
+                                    </td>
+                                    <td class="tr-mono">@s.TimeComplexitySearch</td>
+                                    <td class="tr-mono">@s.TimeComplexityInsert</td>
+                                    <td class="tr-mono">@s.SpaceComplexity</td>
+                                    <td class="tr-demo-link">
+                                        @if (GetDemoSlug(s.Slug) is { } demoSlug)
+                                        {
+                                            <a href="@demoSlug"
+                                               class="btn-live-small"
+                                               @onclick:stopPropagation="true">▶ Live</a>
+                                        }
+                                        else
+                                        {
+                                            <span class="demo-soon">скоро</span>
+                                        }
+                                    </td>
+                                    <td class="tr-go">→</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- КАТЕГОРИИ -->
     <div class="section-area">
         <div class="section-title-row">
-            <h2 class="section-title">Категории</h2>
-            <a href="compare" class="btn-classic">&#9776; Сравнить структуры</a>
+            <h2 class="section-title">Категории структур</h2>
+            <a href="compare" class="btn-classic">⊞ Сравнить структуры</a>
         </div>
 
         <div class="category-grid">
@@ -35,7 +167,8 @@
             {
                 <div class="category-card @(_selectedCategory == cat.Id ? "active" : "")"
                      style="border-left-color: @cat.AccentColor"
-                     @onclick="() => SelectCategory(cat.Id)">
+                     @onclick="() => SelectCategory(cat.Id)"
+                     title="@cat.Description">
                     <div class="card-top">
                         <div class="card-icon">@cat.Icon</div>
                         <div class="card-tag">@cat.Tag</div>
@@ -44,38 +177,43 @@
                     <p class="card-desc">@cat.Description</p>
                     <div class="card-foot">
                         <span>@cat.Structures.Count структур</span>
-                        <span>&#8594;</span>
+                        <span class="card-expand-hint">
+                            @(_selectedCategory == cat.Id ? "▲ Свернуть" : "▼ Показать")
+                        </span>
                     </div>
                 </div>
             }
         </div>
     </div>
 
+    <!-- ТАБЛИЦА ВЫБРАННОЙ КАТЕГОРИИ -->
     @if (_selectedCategory.HasValue)
     {
         var cat = _categories.First(c => c.Id == _selectedCategory.Value);
         <div class="section-area">
             <div class="struct-list-header">
-                <span>@cat.Icon &nbsp; @cat.NameRu</span>
-                <button class="close-btn" @onclick="() => _selectedCategory = null">&#10005; Закрыть</button>
+                <span>@cat.Icon &nbsp; @cat.NameRu
+                    &nbsp;<span style="font-weight:normal;opacity:.7;font-size:10px;">— нажмите строку для подробностей</span>
+                </span>
+                <button class="close-btn" @onclick="() => _selectedCategory = null">✕ Закрыть</button>
             </div>
             <div class="table-wrap">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>#</th>
                             <th>Название</th>
                             <th>Поиск</th>
                             <th>Вставка</th>
                             <th>Память</th>
+                            <th>Live demo</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var s in cat.Structures)
                         {
-                            <tr @onclick='() => Nav.NavigateTo($"structure/{s.Slug}")'>
-                                <td class="tr-num" style="color: @cat.AccentColor">#@s.IssueNumber</td>
+                            <tr @onclick='() => Nav.NavigateTo($"structure/{s.Slug}")'
+                                title="@s.Description">
                                 <td class="tr-name-b">
                                     <strong>@s.NameRu</strong>
                                     <small>@s.Name</small>
@@ -83,7 +221,19 @@
                                 <td class="tr-mono">@s.TimeComplexitySearch</td>
                                 <td class="tr-mono">@s.TimeComplexityInsert</td>
                                 <td class="tr-mono">@s.SpaceComplexity</td>
-                                <td class="tr-go">&#8594;</td>
+                                <td class="tr-demo-link">
+                                    @if (GetDemoSlug(s.Slug) is { } demoSlug)
+                                    {
+                                        <a href="@demoSlug"
+                                           class="btn-live-small"
+                                           @onclick:stopPropagation="true">▶ Live</a>
+                                    }
+                                    else
+                                    {
+                                        <span class="demo-soon">скоро</span>
+                                    }
+                                </td>
+                                <td class="tr-go">→</td>
                             </tr>
                         }
                     </tbody>
@@ -92,52 +242,79 @@
         </div>
     }
 
-    <div class="section-area" style="margin-top: 16px;">
-        <div class="section-title-row">
-            <h2 class="section-title">Все структуры</h2>
-            <div class="search-row">
-                <span class="search-label">Поиск:</span>
-                <input type="text"
-                       placeholder="Введите название..."
-                       @bind="_searchQuery"
-                       @bind:event="oninput"
-                       class="search-input" />
+    <!-- ВСЕ СТРУКТУРЫ (без поиска) -->
+    @if (string.IsNullOrEmpty(_searchQuery))
+    {
+        <div class="section-area" style="margin-top: 16px;">
+            <div class="section-title-row">
+                <h2 class="section-title">Все структуры</h2>
+                <div class="all-count-badge">@DS.GetAllStructures().Count() реализаций</div>
+            </div>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Название</th>
+                            <th>Категория</th>
+                            <th>Поиск</th>
+                            <th>Вставка</th>
+                            <th>Память</th>
+                            <th>Live demo</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in DS.GetAllStructures())
+                        {
+                            var cat = _categories.First(c => c.Id == s.Category);
+                            <tr @onclick='() => Nav.NavigateTo($"structure/{s.Slug}")'
+                                title="@s.Description">
+                                <td class="tr-name-b">
+                                    <strong>@s.NameRu</strong>
+                                    <small>@s.Name</small>
+                                </td>
+                                <td>
+                                    <span class="cat-pill" style="border-left: 2px solid @cat.AccentColor">
+                                        @cat.NameRu
+                                    </span>
+                                </td>
+                                <td class="tr-mono">@s.TimeComplexitySearch</td>
+                                <td class="tr-mono">@s.TimeComplexityInsert</td>
+                                <td class="tr-mono">@s.SpaceComplexity</td>
+                                <td class="tr-demo-link">
+                                    @if (GetDemoSlug(s.Slug) is { } demoSlug)
+                                    {
+                                        <a href="@demoSlug"
+                                           class="btn-live-small"
+                                           @onclick:stopPropagation="true">▶ Live</a>
+                                    }
+                                    else
+                                    {
+                                        <span class="demo-soon">скоро</span>
+                                    }
+                                </td>
+                                <td class="tr-go">→</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
         </div>
-        <div class="table-wrap">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Название</th>
-                        <th>Категория</th>
-                        <th>Поиск</th>
-                        <th>Вставка</th>
-                        <th>Память</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var s in _filteredStructures)
-                    {
-                        var cat = _categories.First(c => c.Id == s.Category);
-                        <tr @onclick='() => Nav.NavigateTo($"structure/{s.Slug}")'>
-                            <td class="tr-num" style="color: @cat.AccentColor">#@s.IssueNumber</td>
-                            <td class="tr-name-b">
-                                <strong>@s.NameRu</strong>
-                                <small>@s.Name</small>
-                            </td>
-                            <td><span class="cat-pill">@cat.NameRu</span></td>
-                            <td class="tr-mono">@s.TimeComplexitySearch</td>
-                            <td class="tr-mono">@s.TimeComplexityInsert</td>
-                            <td class="tr-mono">@s.SpaceComplexity</td>
-                            <td class="tr-go">&#8594;</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+    }
+
+    <!-- LinearDictionary — отдельная демо-структура без записи в каталоге -->
+    @if (string.IsNullOrEmpty(_searchQuery))
+    {
+        <div class="section-area" style="margin-top: 10px; padding-bottom: 28px;">
+            <div class="linear-demo-note">
+                <span class="linear-demo-icon">ℹ</span>
+                Также доступна интерактивная демо-страница
+                <strong>LinearDictionary</strong> — простой последовательный словарь,
+                реализованный в Dictorium:
+                <a href="demo/linear" class="btn-live-small" style="margin-left:6px;">▶ Live Demo</a>
+            </div>
         </div>
-    </div>
+    }
 
 </div>
 
@@ -150,7 +327,9 @@
         DS.GetAllStructures().Where(s =>
             string.IsNullOrEmpty(_searchQuery) ||
             s.Name.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ||
-            s.NameRu.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase));
+            s.NameRu.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ||
+            s.TimeComplexitySearch.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ||
+            (s.Description?.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ?? false));
 
     protected override void OnInitialized()
     {
@@ -161,4 +340,15 @@
     {
         _selectedCategory = _selectedCategory == id ? null : id;
     }
+
+    // Карта slug (из DataStructureService) → URL страницы Live Demo
+    private static string? GetDemoSlug(string slug) => slug switch
+    {
+        "open-hashing"    => "demo/chaining",
+        "linear-probing"  => "demo/lp",
+        "avl-tree"        => "demo/avl",
+        "cuckoo-hashing"  => "demo/cuckoo",
+        "perfect-hashing" => "demo/perfecthash",
+        _                 => null           // остальные пока без демо
+    };
 }
