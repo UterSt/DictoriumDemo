@@ -740,3 +740,45 @@
 .avl-swatch-scanning { background: #fffacc; border-color: #cc8800; }
 .avl-swatch-hit      { background: #ddf4dd; border-color: #008800; }
 .avl-swatch-miss     { background: #f4dddd; border-color: #880000; }
+
+/* ── BulkGeneratePanel ───────────────────────────────────────── */
+.bulk-gen-panel { margin-top: 4px; }
+
+.bulk-gen-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.bulk-gen-label {
+    font-family: var(--font-ui);
+    font-size: 10px;
+    color: var(--text-3);
+    flex: 1;
+}
+
+.bulk-gen-input {
+    width: 54px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    border: 1px solid var(--border);
+    padding: 2px 4px;
+    background: var(--bg);
+    color: var(--text);
+    text-align: right;
+}
+.bulk-gen-input:focus { outline: 1px solid var(--acc-b); }
+
+.bulk-gen-btn { background: #eef4ff; border-color: #3366cc; color: #001188; }
+.bulk-gen-btn:hover:not(:disabled) { background: #ddeeff; }
+
+.bulk-gen-result {
+    margin-top: 5px;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    padding: 3px 6px;
+    border: 1px solid var(--border);
+}
+.bulk-gen-ok  { background: #eeffee; border-color: #008800; color: #003300; }
+.bulk-gen-err { background: #ffeeee; border-color: #880000; color: #440000; }

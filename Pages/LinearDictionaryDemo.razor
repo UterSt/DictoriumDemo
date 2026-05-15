@@ -117,6 +117,15 @@
 
                 <DemoOpHints ActiveTip="@_activeDemoTip" OnToggle="@((id) => { _activeDemoTip = id; StateHasChanged(); })" />
 
+                <div class="ctrl-section">
+                    <div class="ctrl-section-title">Быстрая загрузка</div>
+                    <button class="btn-op" @onclick="DoLoadSample" disabled="@_busy">
+                        Загрузить пример
+                    </button>
+                </div>
+
+                <BulkGeneratePanel Disabled="@_busy" OnInsert="BulkInsertAsync" />
+
                 <div class="ctrl-info">
                     <div class="ctrl-info-row">
                         <span>Count()</span>
@@ -475,5 +484,33 @@
     {
         if (_log.Count > 120) _log.RemoveAt(0);
         _log.Add((text, cls));
+    }
+
+    private async Task DoLoadSample()
+    {
+        if (_busy) return;
+        _busy = true; Reset();
+        string[] keys   = { "apple",  "banana", "cherry",  "date",    "elderberry", "fig",   "grape",   "hazel" };
+        string[] values = { "яблоко", "банан",  "вишня",   "финик",   "бузина",     "инжир", "виноград","лещина" };
+        for (int i = 0; i < keys.Length; i++)
+            await Dtr.LinearAddAsync(_handle, keys[i], values[i]);
+        _items = await Dtr.LinearSnapshotAsync(_handle);
+        SetStatus($"Загружен пример — {_items.Count} элементов", "status-ok", "✓");
+        Log($"Загружен пример ({_items.Count} элементов)", "log-ok");
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task BulkInsertAsync(List<(string Key, string Value)> pairs)
+    {
+        _busy = true; Reset();
+        int added = 0;
+        foreach (var (k, v) in pairs)
+            if (await Dtr.LinearAddAsync(_handle, k, v)) added++;
+        _items = await Dtr.LinearSnapshotAsync(_handle);
+        SetStatus($"Сгенерировано: добавлено {added} из {pairs.Count} элементов", "status-ok", "✓");
+        Log($"Генерация: +{added} элементов", "log-ok");
+        _busy = false;
+        StateHasChanged();
     }
 }

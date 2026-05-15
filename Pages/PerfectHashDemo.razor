@@ -60,7 +60,23 @@
 
                 <!-- Build panel -->
                 <div class="ctrl-section">
-                    <div class="ctrl-section-title">Набор ключей (key=value, по одному на строку)</div>
+                <div class="ctrl-section bulk-gen-panel">
+                    <div class="ctrl-section-title">Генерация данных (Bogus)</div>
+                    <div class="bulk-gen-row">
+                        <label class="bulk-gen-label">Кол-во (макс. 200):</label>
+                        <input class="bulk-gen-input" type="number" min="1" max="200"
+                               @bind="_phGenCount" @bind:event="oninput" disabled="@_busy" />
+                    </div>
+                    <button class="btn-op bulk-gen-btn" @onclick="PhGenerateData" disabled="@_busy">
+                        ⚡ Заполнить textarea (@_phGenCount эл.)
+                    </button>
+                    @if (!string.IsNullOrEmpty(_phGenMsg))
+                    {
+                        <div class="bulk-gen-result @_phGenCls">@_phGenMsg</div>
+                    }
+                </div>
+
+                                    <div class="ctrl-section-title">Набор ключей (key=value, по одному на строку)</div>
                     <textarea class="ph-textarea" @bind="_pairsInput" rows="7"
                               placeholder="apple=яблоко&#10;banana=банан&#10;cherry=вишня"
                               disabled="@_busy"></textarea>
@@ -393,5 +409,22 @@
     {
         if (_log.Count > 120) _log.RemoveAt(0);
         _log.Add((text, cls));
+    }
+
+    private int    _phGenCount = 10;
+    private string _phGenMsg   = "";
+    private string _phGenCls   = "";
+
+    private void PhGenerateData()
+    {
+        if (_busy) return;
+        _phGenCount = Math.Clamp(_phGenCount, 1, 200);
+        var sw    = System.Diagnostics.Stopwatch.StartNew();
+        var pairs = DictoriumDemo.Services.FakerDataGenerator.Generate(_phGenCount);
+        sw.Stop();
+        _pairsInput = string.Join("\n", pairs.Select(p => p.Key + "=" + p.Value));
+        _phGenMsg   = $"✓ Сгенерировано {pairs.Count} пар за {sw.ElapsedMilliseconds} мс — нажмите Build";
+        _phGenCls   = "bulk-gen-ok";
+        StateHasChanged();
     }
 }

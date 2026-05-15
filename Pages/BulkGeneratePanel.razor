@@ -1,0 +1,41 @@
+@using DictoriumDemo.Services
+
+<div class="ctrl-section bulk-gen-panel">
+    <div class="ctrl-section-title">Генерация данных (Bogus)</div>
+    <div class="bulk-gen-row">
+        <label class="bulk-gen-label">Кол-во (макс. 500):</label>
+        <input class="bulk-gen-input" type="number" min="1" max="500"
+               @bind="_count" @bind:event="oninput" disabled="@Disabled" />
+    </div>
+    <button class="btn-op bulk-gen-btn" @onclick="HandleGenerate" disabled="@Disabled">
+        Генерировать (@_count эл.)
+    </button>
+    @if (!string.IsNullOrEmpty(_msg))
+    {
+        <div class="bulk-gen-result @_cls">@_msg</div>
+    }
+</div>
+
+@code {
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback<List<(string Key, string Value)>> OnInsert { get; set; }
+
+    private int    _count = 10;
+    private string _msg   = "";
+    private string _cls   = "";
+
+    private async Task HandleGenerate()
+    {
+        if (Disabled) return;
+        _count = Math.Clamp(_count, 1, 500);
+
+        var sw    = System.Diagnostics.Stopwatch.StartNew();
+        var pairs = FakerDataGenerator.Generate(_count);
+        sw.Stop();
+
+        _msg = $"✓ Сгенерировано {pairs.Count} пар за {sw.ElapsedMilliseconds} мс";
+        _cls = "bulk-gen-ok";
+
+        await OnInsert.InvokeAsync(pairs);
+    }
+}

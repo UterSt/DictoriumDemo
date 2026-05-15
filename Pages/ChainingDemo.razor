@@ -158,10 +158,13 @@
 
                 <div class="ctrl-section">
                     <div class="ctrl-section-title">Быстрая загрузка</div>
-                    <button class="btn-op" @onclick="LoadSample" disabled="@_busy" style="font-size:10px;">
-                        ↓ Загрузить 8 пар (пример)
+                    <button class="btn-op" @onclick="LoadSample" disabled="@_busy">
+                        Загрузить пример
                     </button>
                 </div>
+
+                <BulkGeneratePanel Disabled="@_busy" OnInsert="BulkInsertAsync" />
+
             </div>
 
             <!-- Visualisation -->
@@ -530,4 +533,18 @@
 
     private static string TruncStr(string s, int max) =>
         s.Length <= max ? s : s[..max] + "…";
+
+    private async Task BulkInsertAsync(List<(string Key, string Value)> pairs)
+    {
+        _busy = true; ClearHighlight();
+        int added = 0;
+        foreach (var (k, v) in pairs)
+            if (await Dtr.ChainingAddAsync(_handle, k, v)) added++;
+        _count = await Dtr.ChainingCountAsync(_handle);
+        await RefreshSnapshot();
+        SetStatus($"Сгенерировано: добавлено {added} из {pairs.Count} элементов", "status-ok", "✓");
+        AddLog($"Генерация: +{added} элементов", "log-ok");
+        _busy = false;
+        StateHasChanged();
+    }
 }

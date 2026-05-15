@@ -107,10 +107,13 @@
 
             <div class="ctrl-section">
                 <div class="ctrl-section-title">Пример</div>
-                <button class="btn-op" @onclick="LoadSample" disabled="@_busy" style="font-size:10px;">
-                    ↓ Загрузить 8 пар
+                <button class="btn-op" @onclick="LoadSample" disabled="@_busy">
+                    Загрузить пример
                 </button>
             </div>
+
+            <BulkGeneratePanel Disabled="@_busy" OnInsert="BulkInsertAsync" />
+
         </div>
 
         <!-- ── Main visual ── -->
@@ -731,5 +734,19 @@
         public string Key   { get; set; } = string.Empty;
         public string Value { get; set; } = string.Empty;
         public bool   Occupied => !string.IsNullOrEmpty(Key);
+    }
+
+    private async Task BulkInsertAsync(List<(string Key, string Value)> pairs)
+    {
+        _busy = true; ClearHighlights(); _steps.Clear();
+        int added = 0;
+        foreach (var (k, v) in pairs)
+            if (await Dtr.CuckooAddAsync(_handle, k, v)) added++;
+        _snap = await Dtr.CuckooSnapshotAsync(_handle);
+        RebuildTables();
+        SetStatus($"Сгенерировано: добавлено {added} из {pairs.Count} элементов", "status-ok", "✓");
+        Log($"Генерация: +{added} элементов", "log-ok");
+        _busy = false;
+        StateHasChanged();
     }
 }
