@@ -8,7 +8,7 @@
     <div class="breadcrumb">
         <a href="">Обзор</a>
         <span class="bc-sep">›</span>
-        <a href="structure/perfect-hashing">Абсолют O(1)</a>
+        <a href="">Абсолют O(1)</a>
         <span class="bc-sep">›</span>
         <span class="bc-now">PerfectHashDictionary [LIVE]</span>
     </div>
@@ -64,10 +64,13 @@
                     <textarea class="ph-textarea" @bind="_pairsInput" rows="7"
                               placeholder="apple=яблоко&#10;banana=банан&#10;cherry=вишня"
                               disabled="@_busy"></textarea>
+                    <div class="op-hint-row">
                     <button class="btn-op btn-build" @onclick="DoBuild"
                             disabled="@(_busy || string.IsNullOrWhiteSpace(_pairsInput))">
                         ⚙ Построить — PerfectHashDictionary(pairs)
                     </button>
+                    <span class="op-hint-icon @(_activeDemoTip=="build"?"active":"")" @onclick='()=>ToggleDemoTip("build")'>i</span>
+                </div>
                 </div>
 
                 @if (_handle >= 0)
@@ -79,15 +82,23 @@
                                @bind="_searchKey" @bind:event="oninput"
                                placeholder="введите ключ"
                                disabled="@_busy" />
+                        <div class="op-hint-row">
                         <button class="btn-op btn-search" @onclick="DoSearch"
                                 disabled="@(_busy || string.IsNullOrWhiteSpace(_searchKey))">
                             ▶ TryGetValidatedValue(key)
                         </button>
-                        <button class="btn-op btn-search" @onclick="DoContains"
+                        <span class="op-hint-icon @(_activeDemoTip=="get"?"active":"")" @onclick='()=>ToggleDemoTip("get")'>i</span>
+                        </div>
+                        <div class="op-hint-row">
+                    <button class="btn-op btn-search" @onclick="DoContains"
                                 disabled="@(_busy || string.IsNullOrWhiteSpace(_searchKey))">
                             ▶ ContainsKey(key)
                         </button>
+                    <span class="op-hint-icon @(_activeDemoTip=="contains"?"active":"")" @onclick='()=>ToggleDemoTip("contains")'>i</span>
+                </div>
                     </div>
+
+                    <DemoOpHints ActiveTip="@_activeDemoTip" OnToggle="@((id) => { _activeDemoTip = id; StateHasChanged(); })" />
 
                     <!-- Stats -->
                     <div class="ctrl-info">
@@ -189,6 +200,10 @@
 </div>
 
 @code {
+    // ── Demo tip state ──────────────────────────────────────────────────────
+    private string? _activeDemoTip = null;
+    private void ToggleDemoTip(string id) => _activeDemoTip = _activeDemoTip == id ? null : id;
+
     private bool   _wasmReady;
     private bool   _busy;
     private int    _handle = -1;

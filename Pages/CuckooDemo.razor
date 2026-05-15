@@ -7,7 +7,7 @@
 
     <div class="breadcrumb">
         <a href="">Обзор</a> <span class="bc-sep">›</span>
-        <a href="structure/open-hashing">Хэш-таблицы</a> <span class="bc-sep">›</span>
+        <a href="">Хэш-таблицы</a> <span class="bc-sep">›</span>
         <span class="bc-now">CuckooDictionary [LIVE]</span>
     </div>
 
@@ -60,18 +60,33 @@
             </div>
 
             <div class="ctrl-ops">
-                <button class="btn-op btn-search" @onclick="DoContains"
-                        disabled="@(_busy||string.IsNullOrWhiteSpace(_keyInput))">▶ ContainsKey(key)</button>
-                <button class="btn-op btn-search" @onclick="DoGet"
-                        disabled="@(_busy||string.IsNullOrWhiteSpace(_keyInput))">▶ TryGetValue(key)</button>
-                <button class="btn-op btn-add" @onclick="DoAdd"
-                        disabled="@(_busy||string.IsNullOrWhiteSpace(_keyInput)||string.IsNullOrWhiteSpace(_valInput))">+ Add(key, value)</button>
-                <button class="btn-op btn-add" @onclick="DoInsertOrAssign"
-                        disabled="@(_busy||string.IsNullOrWhiteSpace(_keyInput)||string.IsNullOrWhiteSpace(_valInput))">± InsertOrAssign(key,value)</button>
-                <button class="btn-op btn-remove" @onclick="DoRemove"
-                        disabled="@(_busy||string.IsNullOrWhiteSpace(_keyInput))">− Remove(key)</button>
-                <button class="btn-op btn-clear" @onclick="DoClear" disabled="@_busy">⊘ Clear()</button>
+                <div class="op-hint-row">
+                    <button class="btn-op btn-search" @onclick="DoContains" disabled="@(_busy||string.IsNullOrWhiteSpace(_keyInput))">▶ ContainsKey(key)</button>
+                    <span class="op-hint-icon @(_activeDemoTip=="contains"?"active":"")" @onclick='()=>ToggleDemoTip("contains")'>i</span>
+                </div>
+                <div class="op-hint-row">
+                    <button class="btn-op btn-search" @onclick="DoGet" disabled="@(_busy||string.IsNullOrWhiteSpace(_keyInput))">▶ TryGetValue(key)</button>
+                    <span class="op-hint-icon @(_activeDemoTip=="get"?"active":"")" @onclick='()=>ToggleDemoTip("get")'>i</span>
+                </div>
+                <div class="op-hint-row">
+                    <button class="btn-op btn-add" @onclick="DoAdd" disabled="@(_busy||string.IsNullOrWhiteSpace(_keyInput)||string.IsNullOrWhiteSpace(_valInput))">+ Add(key, value)</button>
+                    <span class="op-hint-icon @(_activeDemoTip=="add"?"active":"")" @onclick='()=>ToggleDemoTip("add")'>i</span>
+                </div>
+                <div class="op-hint-row">
+                    <button class="btn-op btn-add" @onclick="DoInsertOrAssign" disabled="@(_busy||string.IsNullOrWhiteSpace(_keyInput)||string.IsNullOrWhiteSpace(_valInput))">± InsertOrAssign(key,value)</button>
+                    <span class="op-hint-icon @(_activeDemoTip=="ioa"?"active":"")" @onclick='()=>ToggleDemoTip("ioa")'>i</span>
+                </div>
+                <div class="op-hint-row">
+                    <button class="btn-op btn-remove" @onclick="DoRemove" disabled="@(_busy||string.IsNullOrWhiteSpace(_keyInput))">− Remove(key)</button>
+                    <span class="op-hint-icon @(_activeDemoTip=="remove"?"active":"")" @onclick='()=>ToggleDemoTip("remove")'>i</span>
+                </div>
+                <div class="op-hint-row">
+                    <button class="btn-op btn-clear" @onclick="DoClear" disabled="@_busy">⊘ Clear()</button>
+                    <span class="op-hint-icon @(_activeDemoTip=="clear"?"active":"")" @onclick='()=>ToggleDemoTip("clear")'>i</span>
+                </div>
             </div>
+
+            <DemoOpHints ActiveTip="@_activeDemoTip" OnToggle="@((id) => { _activeDemoTip = id; StateHasChanged(); })" />
 
             <div class="ctrl-info">
                 <div class="ctrl-info-row"><span>Count()</span><span class="ctrl-info-val">@_snap.Count</span></div>
@@ -261,6 +276,8 @@
 
 @code {
     // ── State ─────────────────────────────────────────────────────────────────
+    private string? _activeDemoTip = null;
+    private void ToggleDemoTip(string id) => _activeDemoTip = _activeDemoTip == id ? null : id;
     private bool _wasmReady;
     private bool _busy;
     private int  _handle = -1;

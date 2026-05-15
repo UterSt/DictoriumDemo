@@ -13,6 +13,10 @@
                 Интерактивная визуализация структур данных на C++ / WebAssembly
             </div>
             <div class="topbar-right">
+                <button class="help-btn" @onclick="OpenHelp" title="Что такое Dictorium? Объяснение для всех">
+                    <span class="help-btn-icon">?</span>
+                    Что это?
+                </button>
                 <a href="https://github.com/UterSt" target="_blank" class="gh-link">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
@@ -74,7 +78,9 @@
     }
 
     <main class="main-content">
-        @Body
+        <CascadingValue Value="(Action)OpenHelp" Name="OpenHelp" IsFixed="false">
+            @Body
+        </CascadingValue>
     </main>
 
     <footer class="app-footer">
@@ -83,10 +89,116 @@
         <span class="footer-structs">Linear · LinearProbing · Chaining · PerfectHash · AVL · Cuckoo</span>
         &nbsp;&middot;&nbsp;
         <a href="https://github.com/UterSt" target="_blank" class="footer-link">GitHub</a>
+        &nbsp;&middot;&nbsp;
+        <button class="footer-help-btn" @onclick="OpenHelp">? Справка</button>
     </footer>
 </div>
 
+<!-- ── HELP MODAL ──────────────────────────────────────────────── -->
+@if (_helpOpen)
+{
+    <div class="help-overlay" @onclick="CloseHelpOnOverlay">
+        <div class="help-modal" @onclick:stopPropagation="true">
+            <div class="help-modal-head">
+                <h2>📖 Что такое Dictorium?</h2>
+                <button class="help-modal-close" @onclick="CloseHelp">✕ Закрыть</button>
+            </div>
+            <div class="help-modal-body">
+
+                <p>
+                    <strong>Dictorium</strong> — это библиотека, написанная на языке C++, которая реализует
+                    различные <strong>структуры данных типа «словарь»</strong>: хранилища, где каждое значение
+                    доступно по уникальному ключу — как записная книжка, где имя → номер телефона.
+                </p>
+                <p>
+                    Эта страница — <strong>интерактивная демонстрация</strong>: весь C++ код скомпилирован
+                    прямо в ваш браузер через технологию <strong>WebAssembly</strong>, без серверов и установки.
+                    Вы можете запускать алгоритмы, вставлять свои данные и наблюдать, как они работают изнутри.
+                </p>
+
+                <div class="help-section">
+                    <div class="help-section-title">🔑 Что такое словарь (Dictionary)?</div>
+                    <p style="margin:0; font-size:13px;">
+                        Словарь — структура данных, которая хранит пары <strong>ключ → значение</strong>.
+                        Например: <em>«user_42» → «Иван Петров»</em>. Главная задача — как можно быстрее
+                        находить значение по ключу. Именно поэтому существуют разные реализации: одни
+                        работают быстрее при малом объёме данных, другие — при большом.
+                    </p>
+                </div>
+
+                <div class="help-concept-grid">
+                    <div class="help-concept">
+                        <span class="help-concept-icon">🟢</span>
+                        <div class="help-concept-name">Хэш-таблица</div>
+                        <div class="help-concept-desc">
+                            Вычисляет числовой «отпечаток» ключа (хэш) и кладёт значение в
+                            соответствующую ячейку. Почти мгновенный поиск — как найти слово
+                            по первой букве в бумажном словаре.
+                        </div>
+                    </div>
+                    <div class="help-concept">
+                        <span class="help-concept-icon">🟣</span>
+                        <div class="help-concept-name">Дерево (AVL, B-дерево)</div>
+                        <div class="help-concept-desc">
+                            Элементы хранятся в упорядоченном дереве — как оглавление книги.
+                            Поиск логарифмически быстр и позволяет перебирать ключи по порядку.
+                            Используется в базах данных.
+                        </div>
+                    </div>
+                    <div class="help-concept">
+                        <span class="help-concept-icon">🟠</span>
+                        <div class="help-concept-name">Кукушкино / Совершенное хэширование</div>
+                        <div class="help-concept-desc">
+                            Продвинутые техники хэширования с гарантией поиска за ровно 1 шаг
+                            (O(1) worst case). Кукушка «выталкивает» старый элемент на новое место,
+                            как кукушка — других птенцов из гнезда.
+                        </div>
+                    </div>
+                    <div class="help-concept">
+                        <span class="help-concept-icon">🔵</span>
+                        <div class="help-concept-name">Вероятностный поиск</div>
+                        <div class="help-concept-desc">
+                            Структуры вроде Skip List используют случайность для
+                            быстрого поиска без жёсткой организации дерева. Быстро,
+                            элегантно и просто в реализации.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="help-section">
+                    <div class="help-section-title">⏱ Обозначения сложности в таблицах</div>
+                    <table class="help-cx-table">
+                        <thead><tr><th>Обозначение</th><th>Что значит на практике</th></tr></thead>
+                        <tbody>
+                            <tr><td><span class="help-mono">O(1)</span></td><td>Мгновенно — время не зависит от объёма данных. Лучший результат.</td></tr>
+                            <tr><td><span class="help-mono">O(log n)</span></td><td>Очень быстро — при 1 млн записей понадобится всего ~20 шагов.</td></tr>
+                            <tr><td><span class="help-mono">O(n)</span></td><td>Линейно — 1 млн записей = 1 млн шагов в худшем случае.</td></tr>
+                            <tr><td><span class="help-mono">O(1+α)</span></td><td>Почти мгновенно — O(1) плюс небольшой коэффициент заполненности α.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="help-section">
+                    <div class="help-section-title">🚀 Как пользоваться демо</div>
+                    <p style="margin:0; font-size:13px;">
+                        Нажмите <strong>▶ Live</strong> напротив любой структуры в таблице, чтобы открыть
+                        интерактивную страницу. Там можно вводить ключи и значения, нажимать «Вставить»,
+                        «Поиск», «Удалить» и наблюдать, как данные реально перемещаются внутри структуры.
+                        Все вычисления происходят прямо в браузере — никаких серверов.
+                    </p>
+                </div>
+
+            </div>
+            <div class="help-modal-footer">
+                <button @onclick="CloseHelp">Понятно, спасибо!</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
+    private bool _helpOpen = false;
+
     private bool IsActive(string href)
     {
         var current = Nav.ToBaseRelativePath(Nav.Uri);
@@ -99,4 +211,9 @@
         var current = Nav.ToBaseRelativePath(Nav.Uri);
         return current.StartsWith("demo/");
     }
+
+    private async Task OpenHelpAsync() { _helpOpen = true; await InvokeAsync(StateHasChanged); }
+    private void OpenHelp() { _helpOpen = true; StateHasChanged(); }
+    private void CloseHelp() { _helpOpen = false; StateHasChanged(); }
+    private void CloseHelpOnOverlay() { _helpOpen = false; StateHasChanged(); }
 }

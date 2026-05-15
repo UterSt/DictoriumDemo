@@ -1,0 +1,62 @@
+@* Reusable operation hints component for all demo pages *@
+
+@if (ActiveTip != null && Tips.TryGetValue(ActiveTip, out var tip))
+{
+    <div class="tip-box">
+        <div style="flex:1;">
+            <span class="tip-box-title">@tip.Title</span>
+            @tip.Body
+        </div>
+        <button class="tip-box-close" @onclick="Close">✕</button>
+    </div>
+}
+
+@code {
+    [Parameter] public string? ActiveTip { get; set; }
+    [Parameter] public EventCallback<string?> OnToggle { get; set; }
+
+    private async Task Close() => await OnToggle.InvokeAsync(null);
+
+    public static readonly Dictionary<string, (string Title, string Body)> Tips = new()
+    {
+        ["contains"] = (
+            "ContainsKey(key)",
+            "Проверяет, существует ли ключ в словаре. Возвращает true/false. Не читает значение — только факт наличия. Аналог: if key in dict (Python)."
+        ),
+        ["get"] = (
+            "TryGetValue(key)",
+            "Ищет ключ и возвращает связанное значение, если ключ найден. Если ключа нет — возвращает false. Безопаснее, чем прямое обращение: не бросает исключение при отсутствии."
+        ),
+        ["add"] = (
+            "Add(key, value)",
+            "Вставляет новую пару «ключ → значение». Если ключ уже существует — бросает исключение. Используйте, когда хотите гарантировать уникальность записи."
+        ),
+        ["ioa"] = (
+            "InsertOrAssign(key, value)",
+            "Вставляет пару, если ключа нет; перезаписывает значение, если ключ уже существует. Безопасный «upsert» — никогда не бросает исключение о дублях."
+        ),
+        ["remove"] = (
+            "Remove(key)",
+            "Удаляет пару с указанным ключом. Если ключа нет — возвращает false (не бросает исключение). Структура перестраивается, чтобы сохранить корректность."
+        ),
+        ["clear"] = (
+            "Clear()",
+            "Удаляет все пары из словаря, сбрасывает размер до 0. Структура остаётся рабочей — можно вставлять заново. Быстрая операция: O(m), где m — размер таблицы."
+        ),
+        ["count"] = (
+            "Count()",
+            "Возвращает текущее число пар «ключ → значение» в словаре. Не перебирает элементы — хранит счётчик отдельно, поэтому O(1)."
+        ),
+        ["build"] = (
+            "Build(keys, values)",
+            "Строит совершенную хэш-функцию сразу для всего набора ключей. Данные должны быть известны заранее и не изменяться. После построения поиск гарантированно O(1) без коллизий."
+        ),
+        ["load"] = (
+            "Коэффициент загрузки (α = n/m)",
+            "Отношение числа элементов n к числу корзин m. Чем ближе α к 1, тем больше коллизий и медленнее работа. При α > 0.7 хэш-таблица обычно расширяется (rehash)."
+        ),
+    };
+
+    public static (string Title, string Body) Get(string key) =>
+        Tips.TryGetValue(key, out var t) ? t : ("", "");
+}

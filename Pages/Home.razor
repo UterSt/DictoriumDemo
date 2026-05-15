@@ -13,22 +13,17 @@
             <span class="hero-badge">Dictorium Library</span>
             <span class="hero-badge hero-badge-live">● Live Demo</span>
         </div>
-
         <h1 class="hero-title">Словари и хэш-таблицы — в живую</h1>
-
         <p class="hero-subtitle">
             <strong>Dictorium</strong> — библиотека словарей на C++, скомпилированная
             прямо в браузер через WebAssembly.<br />
             Здесь вы можете <em>запустить</em> каждую структуру, вставить свои данные
-            и пошагово наблюдать, как работают алгоритмы: от линейного поиска
-            до AVL-деревьев и кукушкиного хеширования.
+            и наблюдать как работают алгоритмы: от линейного поиска до AVL-деревьев.
         </p>
-
         <div class="hero-cta-row">
             <a href="demo/linear" class="btn-hero-primary">▶ Запустить демо</a>
             <a href="compare" class="btn-hero-secondary">⊞ Сравнить алгоритмы</a>
         </div>
-
         <div class="hero-stats">
             @foreach (var cat in _categories)
             {
@@ -40,22 +35,155 @@
         </div>
     </div>
 
+    <!-- INTRO STRIP -->
+    <div class="intro-strip">
+        <div class="intro-strip-text">
+            <strong>Новичок в теме?</strong> Словарь в программировании — хранилище
+            пар «ключ → значение» (как телефонная книга). Хэш-таблица — самый быстрый способ найти что угодно почти мгновенно.
+        </div>
+        <button class="intro-strip-btn" @onclick="OpenHelpModal">📖 Подробнее — что всё это значит</button>
+    </div>
+
     <!-- КАК ПОЛЬЗОВАТЬСЯ -->
     <div class="howto-strip">
         <div class="howto-step">
             <span class="howto-num">1</span>
-            <span class="howto-text"><strong>Выберите структуру</strong> из каталога ниже или через навигацию</span>
+            <span class="howto-text"><strong>Выберите структуру</strong> из каталога или пройдите опросник ниже</span>
         </div>
         <span class="howto-arrow">›</span>
         <div class="howto-step">
             <span class="howto-num">2</span>
-            <span class="howto-text"><strong>Перейдите в демо</strong> — кнопка ▶ Live в таблице</span>
+            <span class="howto-text"><strong>Нажмите ▶ Live</strong> в столбце «Live demo» в таблице</span>
         </div>
         <span class="howto-arrow">›</span>
         <div class="howto-step">
             <span class="howto-num">3</span>
-            <span class="howto-text"><strong>Вставляйте, ищите, удаляйте</strong> данные и смотрите анимацию</span>
+            <span class="howto-text"><strong>Вставляйте, ищите, удаляйте</strong> данные и наблюдайте анимацию</span>
         </div>
+    </div>
+
+    <!-- ОПРОСНИК -->
+    <div class="section-area" style="margin-top:0; border-top: 2px solid var(--border-dk);">
+        <div class="section-title-row" style="cursor:pointer;" @onclick="ToggleQuiz">
+            <h2 class="section-title">🧭 Помощник выбора структуры</h2>
+            <span class="card-expand-hint" style="font-size:12px;">
+                @(_quizOpen ? "▲ Свернуть" : "▼ Ответьте на 4 вопроса — получите рекомендацию")
+            </span>
+        </div>
+
+        @if (_quizOpen)
+        {
+            <div class="quiz-wrap">
+                <!-- Q1 -->
+                <div class="quiz-question">
+                    <div class="quiz-q-label">
+                        <span class="quiz-q-num">1</span>
+                        Как часто данные <strong>меняются</strong> (вставки / удаления)?
+                    </div>
+                    <div class="quiz-options">
+                        @foreach (var opt in Q1Options)
+                        {
+                            <label class="quiz-opt @(_q1 == opt.Val ? "selected" : "")">
+                                <input type="radio" name="q1" value="@opt.Val"
+                                       checked="@(_q1 == opt.Val)"
+                                       @onchange="() => { _q1 = opt.Val; _quizResult = null; }" />
+                                @opt.Label
+                            </label>
+                        }
+                    </div>
+                </div>
+
+                <!-- Q2 -->
+                <div class="quiz-question">
+                    <div class="quiz-q-label">
+                        <span class="quiz-q-num">2</span>
+                        Нужен ли перебор ключей <strong>по порядку</strong> (A, B, C…)?
+                    </div>
+                    <div class="quiz-options">
+                        @foreach (var opt in Q2Options)
+                        {
+                            <label class="quiz-opt @(_q2 == opt.Val ? "selected" : "")">
+                                <input type="radio" name="q2" value="@opt.Val"
+                                       checked="@(_q2 == opt.Val)"
+                                       @onchange="() => { _q2 = opt.Val; _quizResult = null; }" />
+                                @opt.Label
+                            </label>
+                        }
+                    </div>
+                </div>
+
+                <!-- Q3 -->
+                <div class="quiz-question">
+                    <div class="quiz-q-label">
+                        <span class="quiz-q-num">3</span>
+                        Насколько критична <strong>скорость поиска</strong> в худшем случае?
+                    </div>
+                    <div class="quiz-options">
+                        @foreach (var opt in Q3Options)
+                        {
+                            <label class="quiz-opt @(_q3 == opt.Val ? "selected" : "")">
+                                <input type="radio" name="q3" value="@opt.Val"
+                                       checked="@(_q3 == opt.Val)"
+                                       @onchange="() => { _q3 = opt.Val; _quizResult = null; }" />
+                                @opt.Label
+                            </label>
+                        }
+                    </div>
+                </div>
+
+                <!-- Q4 -->
+                <div class="quiz-question">
+                    <div class="quiz-q-label">
+                        <span class="quiz-q-num">4</span>
+                        Сколько элементов будет в словаре?
+                    </div>
+                    <div class="quiz-options">
+                        @foreach (var opt in Q4Options)
+                        {
+                            <label class="quiz-opt @(_q4 == opt.Val ? "selected" : "")">
+                                <input type="radio" name="q4" value="@opt.Val"
+                                       checked="@(_q4 == opt.Val)"
+                                       @onchange="() => { _q4 = opt.Val; _quizResult = null; }" />
+                                @opt.Label
+                            </label>
+                        }
+                    </div>
+                </div>
+
+                <div class="quiz-actions">
+                    <button class="btn-hero-primary" @onclick="RunQuiz"
+                            disabled="@(_q1 == 0 || _q2 == 0 || _q3 == 0 || _q4 == 0)">
+                        → Показать подходящие структуры
+                    </button>
+                    @if (_q1 != 0 || _q2 != 0 || _q3 != 0 || _q4 != 0)
+                    {
+                        <button class="btn-hero-secondary" @onclick="ResetQuiz">↺ Сбросить</button>
+                    }
+                </div>
+
+                @if (_quizResult != null)
+                {
+                    <div class="quiz-result">
+                        <div class="quiz-result-title">🎯 Рекомендации на основе ваших ответов:</div>
+                        @foreach (var r in _quizResult)
+                        {
+                            <div class="quiz-result-item" style="border-left-color: @r.Color">
+                                <div class="quiz-result-rank">@r.Rank</div>
+                                <div class="quiz-result-info">
+                                    <div class="quiz-result-name">@r.NameRu</div>
+                                    <div class="quiz-result-en">@r.Name</div>
+                                    <div class="quiz-result-reason">@r.Reason</div>
+                                </div>
+                                @if (r.DemoUrl != null)
+                                {
+                                    <a href="@r.DemoUrl" class="btn-live-small" style="align-self:center;">▶ Live</a>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
     </div>
 
     <!-- ПОИСК -->
@@ -63,13 +191,10 @@
         <div class="search-section-inner">
             <label class="search-main-label" for="main-search">🔍 Найти структуру данных</label>
             <div class="search-main-row">
-                <input id="main-search"
-                       type="text"
+                <input id="main-search" type="text"
                        placeholder="Например: AVL, линейное, хеш, O(1)..."
-                       @bind="_searchQuery"
-                       @bind:event="oninput"
-                       class="search-main-input"
-                       autocomplete="off" />
+                       @bind="_searchQuery" @bind:event="oninput"
+                       class="search-main-input" autocomplete="off" />
                 @if (!string.IsNullOrEmpty(_searchQuery))
                 {
                     <button class="search-clear-btn" @onclick='() => _searchQuery = ""'>✕ Сброс</button>
@@ -104,53 +229,33 @@
             {
                 <div class="table-wrap">
                     <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Название</th>
-                                <th>Категория</th>
-                                <th>Поиск</th>
-                                <th>Вставка</th>
-                                <th>Память</th>
-                                <th>Live demo</th>
-                                <th></th>
-                            </tr>
-                        </thead>
+                        <thead><tr>
+                            <th>Название</th><th>Категория</th>
+                            <th><span class="info-icon @(_activeTip=="sr-s"?"active":"")" @onclick='()=>ToggleTip("sr-s")'>i</span> Поиск</th>
+                            <th><span class="info-icon @(_activeTip=="sr-i"?"active":"")" @onclick='()=>ToggleTip("sr-i")'>i</span> Вставка</th>
+                            <th><span class="info-icon @(_activeTip=="sr-m"?"active":"")" @onclick='()=>ToggleTip("sr-m")'>i</span> Память</th>
+                            <th>Live demo</th>
+                        </tr></thead>
                         <tbody>
                             @foreach (var s in _filteredStructures)
                             {
                                 var cat = _categories.First(c => c.Id == s.Category);
-                                <tr @onclick='() => Nav.NavigateTo($"structure/{s.Slug}")'
-                                    title="@s.Description">
-                                    <td class="tr-name-b">
-                                        <strong>@s.NameRu</strong>
-                                        <small>@s.Name</small>
-                                    </td>
-                                    <td>
-                                        <span class="cat-pill" style="border-left: 2px solid @cat.AccentColor">
-                                            @cat.NameRu
-                                        </span>
-                                    </td>
+                                <tr title="@s.Description">
+                                    <td class="tr-name-b"><strong>@s.NameRu</strong><small>@s.Name</small></td>
+                                    <td><span class="cat-pill" style="border-left:2px solid @cat.AccentColor">@cat.NameRu</span></td>
                                     <td class="tr-mono">@s.TimeComplexitySearch</td>
                                     <td class="tr-mono">@s.TimeComplexityInsert</td>
                                     <td class="tr-mono">@s.SpaceComplexity</td>
                                     <td class="tr-demo-link">
-                                        @if (GetDemoSlug(s.Slug) is { } demoSlug)
-                                        {
-                                            <a href="@demoSlug"
-                                               class="btn-live-small"
-                                               @onclick:stopPropagation="true">▶ Live</a>
-                                        }
-                                        else
-                                        {
-                                            <span class="demo-soon">скоро</span>
-                                        }
+                                        @if (GetDemoSlug(s.Slug) is { } ds) { <a href="@ds" class="btn-live-small">▶ Live</a> }
+                                        else { <span class="demo-soon">скоро</span> }
                                     </td>
-                                    <td class="tr-go">→</td>
                                 </tr>
                             }
                         </tbody>
                     </table>
                 </div>
+                @RenderTipBox("sr-s", "sr-i", "sr-m")
             }
         </div>
     }
@@ -161,25 +266,18 @@
             <h2 class="section-title">Категории структур</h2>
             <a href="compare" class="btn-classic">⊞ Сравнить структуры</a>
         </div>
-
         <div class="category-grid">
             @foreach (var cat in _categories)
             {
                 <div class="category-card @(_selectedCategory == cat.Id ? "active" : "")"
-                     style="border-left-color: @cat.AccentColor"
-                     @onclick="() => SelectCategory(cat.Id)"
-                     title="@cat.Description">
-                    <div class="card-top">
-                        <div class="card-icon">@cat.Icon</div>
-                        <div class="card-tag">@cat.Tag</div>
-                    </div>
+                     style="border-left-color:@cat.AccentColor"
+                     @onclick="() => SelectCategory(cat.Id)" title="@cat.Description">
+                    <div class="card-top"><div class="card-icon">@cat.Icon</div><div class="card-tag">@cat.Tag</div></div>
                     <h3 class="card-title">@cat.NameRu</h3>
                     <p class="card-desc">@cat.Description</p>
                     <div class="card-foot">
                         <span>@cat.Structures.Count структур</span>
-                        <span class="card-expand-hint">
-                            @(_selectedCategory == cat.Id ? "▲ Свернуть" : "▼ Показать")
-                        </span>
+                        <span class="card-expand-hint">@(_selectedCategory == cat.Id ? "▲ Свернуть" : "▼ Показать")</span>
                     </div>
                 </div>
             }
@@ -192,125 +290,84 @@
         var cat = _categories.First(c => c.Id == _selectedCategory.Value);
         <div class="section-area">
             <div class="struct-list-header">
-                <span>@cat.Icon &nbsp; @cat.NameRu
-                    &nbsp;<span style="font-weight:normal;opacity:.7;font-size:10px;">— нажмите строку для подробностей</span>
-                </span>
+                <span>@cat.Icon &nbsp; @cat.NameRu</span>
                 <button class="close-btn" @onclick="() => _selectedCategory = null">✕ Закрыть</button>
             </div>
             <div class="table-wrap">
                 <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Название</th>
-                            <th>Поиск</th>
-                            <th>Вставка</th>
-                            <th>Память</th>
-                            <th>Live demo</th>
-                            <th></th>
-                        </tr>
-                    </thead>
+                    <thead><tr>
+                        <th>Название</th>
+                        <th><span class="info-icon @(_activeTip=="cat-s"?"active":"")" @onclick='()=>ToggleTip("cat-s")'>i</span> Поиск</th>
+                        <th>Вставка</th><th>Память</th><th>Live demo</th>
+                    </tr></thead>
                     <tbody>
                         @foreach (var s in cat.Structures)
                         {
-                            <tr @onclick='() => Nav.NavigateTo($"structure/{s.Slug}")'
-                                title="@s.Description">
-                                <td class="tr-name-b">
-                                    <strong>@s.NameRu</strong>
-                                    <small>@s.Name</small>
-                                </td>
+                            <tr title="@s.Description">
+                                <td class="tr-name-b"><strong>@s.NameRu</strong><small>@s.Name</small></td>
                                 <td class="tr-mono">@s.TimeComplexitySearch</td>
                                 <td class="tr-mono">@s.TimeComplexityInsert</td>
                                 <td class="tr-mono">@s.SpaceComplexity</td>
                                 <td class="tr-demo-link">
-                                    @if (GetDemoSlug(s.Slug) is { } demoSlug)
-                                    {
-                                        <a href="@demoSlug"
-                                           class="btn-live-small"
-                                           @onclick:stopPropagation="true">▶ Live</a>
-                                    }
-                                    else
-                                    {
-                                        <span class="demo-soon">скоро</span>
-                                    }
+                                    @if (GetDemoSlug(s.Slug) is { } ds) { <a href="@ds" class="btn-live-small">▶ Live</a> }
+                                    else { <span class="demo-soon">скоро</span> }
                                 </td>
-                                <td class="tr-go">→</td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
+            @RenderTipBox("cat-s", null, null)
         </div>
     }
 
-    <!-- ВСЕ СТРУКТУРЫ (без поиска) -->
+    <!-- ВСЕ СТРУКТУРЫ -->
     @if (string.IsNullOrEmpty(_searchQuery))
     {
-        <div class="section-area" style="margin-top: 16px;">
+        <div class="section-area" style="margin-top:16px;">
             <div class="section-title-row">
                 <h2 class="section-title">Все структуры</h2>
                 <div class="all-count-badge">@DS.GetAllStructures().Count() реализаций</div>
             </div>
             <div class="table-wrap">
                 <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Название</th>
-                            <th>Категория</th>
-                            <th>Поиск</th>
-                            <th>Вставка</th>
-                            <th>Память</th>
-                            <th>Live demo</th>
-                            <th></th>
-                        </tr>
-                    </thead>
+                    <thead><tr>
+                        <th>Название</th><th>Категория</th>
+                        <th><span class="info-icon @(_activeTip=="all-s"?"active":"")" @onclick='()=>ToggleTip("all-s")'>i</span> Поиск</th>
+                        <th><span class="info-icon @(_activeTip=="all-i"?"active":"")" @onclick='()=>ToggleTip("all-i")'>i</span> Вставка</th>
+                        <th><span class="info-icon @(_activeTip=="all-m"?"active":"")" @onclick='()=>ToggleTip("all-m")'>i</span> Память</th>
+                        <th>Live demo</th>
+                    </tr></thead>
                     <tbody>
                         @foreach (var s in DS.GetAllStructures())
                         {
                             var cat = _categories.First(c => c.Id == s.Category);
-                            <tr @onclick='() => Nav.NavigateTo($"structure/{s.Slug}")'
-                                title="@s.Description">
-                                <td class="tr-name-b">
-                                    <strong>@s.NameRu</strong>
-                                    <small>@s.Name</small>
-                                </td>
-                                <td>
-                                    <span class="cat-pill" style="border-left: 2px solid @cat.AccentColor">
-                                        @cat.NameRu
-                                    </span>
-                                </td>
+                            <tr title="@s.Description">
+                                <td class="tr-name-b"><strong>@s.NameRu</strong><small>@s.Name</small></td>
+                                <td><span class="cat-pill" style="border-left:2px solid @cat.AccentColor">@cat.NameRu</span></td>
                                 <td class="tr-mono">@s.TimeComplexitySearch</td>
                                 <td class="tr-mono">@s.TimeComplexityInsert</td>
                                 <td class="tr-mono">@s.SpaceComplexity</td>
                                 <td class="tr-demo-link">
-                                    @if (GetDemoSlug(s.Slug) is { } demoSlug)
-                                    {
-                                        <a href="@demoSlug"
-                                           class="btn-live-small"
-                                           @onclick:stopPropagation="true">▶ Live</a>
-                                    }
-                                    else
-                                    {
-                                        <span class="demo-soon">скоро</span>
-                                    }
+                                    @if (GetDemoSlug(s.Slug) is { } ds) { <a href="@ds" class="btn-live-small">▶ Live</a> }
+                                    else { <span class="demo-soon">скоро</span> }
                                 </td>
-                                <td class="tr-go">→</td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
+            @RenderTipBox("all-s", "all-i", "all-m")
         </div>
     }
 
-    <!-- LinearDictionary — отдельная демо-структура без записи в каталоге -->
+    <!-- LinearDictionary note -->
     @if (string.IsNullOrEmpty(_searchQuery))
     {
-        <div class="section-area" style="margin-top: 10px; padding-bottom: 28px;">
+        <div class="section-area" style="margin-top:10px;padding-bottom:28px;">
             <div class="linear-demo-note">
                 <span class="linear-demo-icon">ℹ</span>
-                Также доступна интерактивная демо-страница
-                <strong>LinearDictionary</strong> — простой последовательный словарь,
-                реализованный в Dictorium:
+                Также доступна <strong>LinearDictionary</strong> — простой последовательный словарь:
                 <a href="demo/linear" class="btn-live-small" style="margin-left:6px;">▶ Live Demo</a>
             </div>
         </div>
@@ -319,10 +376,112 @@
 </div>
 
 @code {
+    /* ── State ───────────────────────────────────────────────────── */
     private List<DataStructureCategory> _categories = new();
     private StructureCategory? _selectedCategory = null;
     private string _searchQuery = "";
+    private string? _activeTip = null;
 
+    /* ── Quiz state ──────────────────────────────────────────────── */
+    private bool _quizOpen = false;
+    private int _q1 = 0; // mutation frequency: 1=never 2=sometimes 3=often
+    private int _q2 = 0; // ordered traversal: 1=yes 2=no
+    private int _q3 = 0; // search criticality: 1=worst-O1 2=avg-O1 3=not critical
+    private int _q4 = 0; // size: 1=tiny 2=medium 3=large
+    private List<QuizResult>? _quizResult = null;
+
+    /* ── Cascading help ──────────────────────────────────────────── */
+    [CascadingParameter(Name = "OpenHelp")] private Action? OnOpenHelp { get; set; }
+    private void OpenHelpModal() => OnOpenHelp?.Invoke();
+
+    /* ── Quiz option lists ───────────────────────────────────────── */
+    private record Opt(int Val, string Label);
+    private static readonly Opt[] Q1Options = {
+        new(1, "Данные статичны — вставки и удаления редки или отсутствуют"),
+        new(2, "Меняются иногда — редкие вставки/удаления"),
+        new(3, "Постоянно — частые вставки и удаления"),
+    };
+    private static readonly Opt[] Q2Options = {
+        new(1, "Да — нужен range-запрос или порядок (A, B, C…)"),
+        new(2, "Нет — нужен только доступ по конкретному ключу"),
+    };
+    private static readonly Opt[] Q3Options = {
+        new(1, "Критично — каждый запрос должен быть O(1) без исключений"),
+        new(2, "Важно — O(1) в среднем вполне устраивает"),
+        new(3, "Не критично — иногда может быть медленнее"),
+    };
+    private static readonly Opt[] Q4Options = {
+        new(1, "Мало — до ~50 элементов"),
+        new(2, "Средне — сотни или тысячи"),
+        new(3, "Много — десятки тысяч и более"),
+    };
+
+    /* ── Quiz scoring ────────────────────────────────────────────── */
+    private record QuizResult(string Rank, string NameRu, string Name, string Reason, string Color, string? DemoUrl);
+
+    private void RunQuiz()
+    {
+        var scores = new Dictionary<string, int> {
+            ["linear"]     = 0,
+            ["chaining"]   = 0,
+            ["linprobe"]   = 0,
+            ["perfecthash"]= 0,
+            ["avl"]        = 0,
+            ["cuckoo"]     = 0,
+        };
+
+        // Q1: mutation frequency
+        if (_q1 == 1) { scores["perfecthash"] += 3; scores["avl"] += 1; }
+        if (_q1 == 2) { scores["chaining"] += 2; scores["linprobe"] += 2; scores["cuckoo"] += 2; scores["avl"] += 2; }
+        if (_q1 == 3) { scores["chaining"] += 3; scores["linprobe"] += 1; scores["cuckoo"] += 2; scores["avl"] += 2; }
+
+        // Q2: ordered traversal
+        if (_q2 == 1) { scores["avl"] += 5; scores["linear"] += 1; }
+        if (_q2 == 2) { scores["chaining"] += 2; scores["cuckoo"] += 2; scores["perfecthash"] += 2; scores["linprobe"] += 2; }
+
+        // Q3: search criticality
+        if (_q3 == 1) { scores["cuckoo"] += 4; scores["perfecthash"] += 4; }
+        if (_q3 == 2) { scores["chaining"] += 3; scores["linprobe"] += 3; }
+        if (_q3 == 3) { scores["linear"] += 3; scores["avl"] += 2; }
+
+        // Q4: data size
+        if (_q4 == 1) { scores["linear"] += 4; scores["chaining"] += 1; }
+        if (_q4 == 2) { scores["chaining"] += 2; scores["linprobe"] += 2; scores["avl"] += 2; scores["cuckoo"] += 1; }
+        if (_q4 == 3) { scores["chaining"] += 2; scores["cuckoo"] += 3; scores["linprobe"] += 1; scores["perfecthash"] += 1; }
+
+        var reasons = new Dictionary<string, string> {
+            ["linear"]      = "Простой последовательный перебор — идеален для небольших наборов, не требователен к памяти.",
+            ["chaining"]    = "Метод цепочек: гибкий, хорошо переносит коллизии, O(1) в среднем. Универсальный выбор.",
+            ["linprobe"]    = "Открытая адресация: кэш-дружественна, быстра при низкой загрузке таблицы.",
+            ["perfecthash"] = "Совершенное хэширование: O(1) гарантированно, но только для статичного набора ключей.",
+            ["avl"]         = "AVL-дерево: хранит ключи в порядке, позволяет range-запросы, O(log n) на все операции.",
+            ["cuckoo"]      = "Кукушкино хэширование: O(1) гарантированно при поиске, динамичен, эффективен при больших объёмах.",
+        };
+
+        var infos = new Dictionary<string, (string ru, string en, string color, string? demo)> {
+            ["linear"]      = ("Линейный словарь",        "LinearDictionary",      "#888888", "demo/linear"),
+            ["chaining"]    = ("Открытое хэширование",    "ChainingDictionary",    "#228822", "demo/chaining"),
+            ["linprobe"]    = ("Линейное пробирование",   "LinearProbingDictionary","#228866", "demo/lp"),
+            ["perfecthash"] = ("Совершенное хэширование", "PerfectHashDictionary", "#cc6600", "demo/perfecthash"),
+            ["avl"]         = ("AVL-дерево",               "AvlDictionary",         "#882288", "demo/avl"),
+            ["cuckoo"]      = ("Кукушкино хэширование",   "CuckooDictionary",      "#cc6600", "demo/cuckoo"),
+        };
+
+        var medals = new[] { "🥇 Лучший выбор", "🥈 Хороший вариант", "🥉 Также подойдёт" };
+        _quizResult = scores
+            .OrderByDescending(kv => kv.Value)
+            .Take(3)
+            .Select((kv, i) => {
+                var (ru, en, color, demo) = infos[kv.Key];
+                return new QuizResult(medals[i], ru, en, reasons[kv.Key], color, demo);
+            })
+            .ToList();
+    }
+
+    private void ResetQuiz() { _q1 = _q2 = _q3 = _q4 = 0; _quizResult = null; }
+    private void ToggleQuiz() => _quizOpen = !_quizOpen;
+
+    /* ── Tooltips ────────────────────────────────────────────────── */
     private IEnumerable<DataStructureInfo> _filteredStructures =>
         DS.GetAllStructures().Where(s =>
             string.IsNullOrEmpty(_searchQuery) ||
@@ -331,17 +490,55 @@
             s.TimeComplexitySearch.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ||
             (s.Description?.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ?? false));
 
-    protected override void OnInitialized()
-    {
-        _categories = DS.GetAllCategories();
-    }
+    protected override void OnInitialized() => _categories = DS.GetAllCategories();
 
     private void SelectCategory(StructureCategory id)
     {
         _selectedCategory = _selectedCategory == id ? null : id;
+        _activeTip = null;
     }
 
-    // Карта slug (из DataStructureService) → URL страницы Live Demo
+    private void ToggleTip(string id) => _activeTip = _activeTip == id ? null : id;
+
+    private static readonly Dictionary<string, (string title, string body)> TipContent = new() {
+        ["s"]  = ("Время поиска", "Сколько шагов нужно найти элемент. O(1) = мгновенно (лучший результат). O(log n) = очень быстро. O(n) = перебрать все по очереди."),
+        ["i"]  = ("Время вставки", "Сколько шагов нужно добавить новую пару «ключ → значение» в структуру."),
+        ["m"]  = ("Расход памяти", "O(n) — память растёт пропорционально числу элементов. Норма для большинства структур данных."),
+    };
+
+    private RenderFragment RenderTipBox(string? sId, string? iId, string? mId) => builder =>
+    {
+        string? tipKey = null;
+        if (_activeTip != null)
+        {
+            if (sId != null && _activeTip == sId) tipKey = "s";
+            else if (iId != null && _activeTip == iId) tipKey = "i";
+            else if (mId != null && _activeTip == mId) tipKey = "m";
+        }
+        if (tipKey == null) return;
+
+        var (title, body) = TipContent[tipKey];
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "tip-box");
+
+        builder.OpenElement(2, "div");
+        builder.AddAttribute(3, "style", "flex:1;");
+        builder.OpenElement(4, "span");
+        builder.AddAttribute(5, "class", "tip-box-title");
+        builder.AddContent(6, title);
+        builder.CloseElement();
+        builder.AddContent(7, body);
+        builder.CloseElement();
+
+        builder.OpenElement(8, "button");
+        builder.AddAttribute(9, "class", "tip-box-close");
+        builder.AddAttribute(10, "onclick", EventCallback.Factory.Create(this, () => _activeTip = null));
+        builder.AddContent(11, "✕");
+        builder.CloseElement();
+
+        builder.CloseElement();
+    };
+
     private static string? GetDemoSlug(string slug) => slug switch
     {
         "open-hashing"    => "demo/chaining",
@@ -349,6 +546,6 @@
         "avl-tree"        => "demo/avl",
         "cuckoo-hashing"  => "demo/cuckoo",
         "perfect-hashing" => "demo/perfecthash",
-        _                 => null           // остальные пока без демо
+        _                 => null
     };
 }
