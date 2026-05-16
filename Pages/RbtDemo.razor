@@ -1,0 +1,1098 @@
+@page "/demo/rbt"
+@inject NavigationManager Nav
+
+<PageTitle>RbTreeDictionary — Демо — Dictorium</PageTitle>
+
+<div class="page-wrap">
+
+    <div class="breadcrumb">
+        <a href="">Обзор</a>
+        <span class="bc-sep">›</span>
+        <span class="bc-now">RbTreeDictionary [LIVE]</span>
+    </div>
+
+    <div class="struct-head-bar">
+        <div class="struct-issue-num" style="color:var(--acc-g)">
+            dtr::RbTreeDictionary&lt;string, string&gt; — реальная библиотека Dictorium через WASM
+        </div>
+        <h1 class="struct-h1">Красно-чёрное дерево</h1>
+        <div class="struct-en">RbTreeDictionary · O(log n) · самобалансирующееся двоичное дерево поиска</div>
+        <p class="struct-description">
+            <strong>Красно-чёрное дерево</strong> — самобалансирующееся двоичное дерево поиска, в котором каждый узел
+            окрашен в красный или чёрный цвет. Пять инвариантов (свойств КЧД) гарантируют, что дерево остаётся
+            приблизительно сбалансированным: высота не превышает <em>2·log₂(n+1)</em>. Вставка и удаление
+            требуют не более <em>O(log n)</em> ротаций и перекрасок, что делает КЧД предпочтительным выбором
+            для стандартных контейнеров (std::map, TreeMap, SortedDictionary).
+        </p>
+        <div class="struct-tags">
+            <span class="s-tag">Contains O(log n)</span>
+            <span class="s-tag">Add O(log n)</span>
+            <span class="s-tag">Remove O(log n)</span>
+            <span class="s-tag">Высота ≤ 2·log₂(n+1)</span>
+            <span class="s-tag" style="color:var(--acc-g);border-color:var(--acc-g)">● WASM готов</span>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="demo-status @_statusCls">
+            <strong>@_statusIcon</strong>&nbsp; @_status
+        </div>
+    }
+
+    <div class="demo-layout">
+
+        <!-- ── Controls ─────────────────────────────────────────────── -->
+        <div class="demo-controls">
+            <div class="ctrl-section">
+                <div class="ctrl-section-title">Ключ (Key)</div>
+                <input class="search-input" style="width:100%;"
+                       @bind="_keyInput" @bind:event="oninput"
+                       placeholder="apple"
+                       disabled="@_busy" />
+                <div class="ctrl-section-title" style="margin-top:6px;">Значение (Value)</div>
+                <input class="search-input" style="width:100%;margin-bottom:0;"
+                       @bind="_valInput" @bind:event="oninput"
+                       placeholder="яблоко"
+                       disabled="@_busy" />
+            </div>
+
+            <div class="ctrl-ops">
+                <div class="op-hint-row">
+                    <button class="btn-op btn-search" @onclick="DoContains"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                        ▶ Contains(key)
+                    </button>
+                    <span class="op-hint-icon @(_activeDemoTip=="contains"?"active":"")" @onclick='()=>ToggleDemoTip("contains")'>i</span>
+                </div>
+                <div class="op-hint-row">
+                    <button class="btn-op btn-search" @onclick="DoGet"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                        ▶ Get(key)
+                    </button>
+                    <span class="op-hint-icon @(_activeDemoTip=="get"?"active":"")" @onclick='()=>ToggleDemoTip("get")'>i</span>
+                </div>
+                <div class="op-hint-row">
+                    <button class="btn-op btn-add" @onclick="DoAdd"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                        + Add(key, value)
+                    </button>
+                    <span class="op-hint-icon @(_activeDemoTip=="add"?"active":"")" @onclick='()=>ToggleDemoTip("add")'>i</span>
+                </div>
+                <div class="op-hint-row">
+                    <button class="btn-op btn-add" @onclick="DoInsertOrAssign"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                        ± InsertOrAssign(key, value)
+                    </button>
+                    <span class="op-hint-icon @(_activeDemoTip=="ioa"?"active":"")" @onclick='()=>ToggleDemoTip("ioa")'>i</span>
+                </div>
+                <div class="op-hint-row">
+                    <button class="btn-op btn-remove" @onclick="DoRemove"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                        − Remove(key)
+                    </button>
+                    <span class="op-hint-icon @(_activeDemoTip=="remove"?"active":"")" @onclick='()=>ToggleDemoTip("remove")'>i</span>
+                </div>
+                <div class="op-hint-row">
+                    <button class="btn-op btn-clear" @onclick="DoClear" disabled="@_busy">
+                        ⊘ Clear()
+                    </button>
+                    <span class="op-hint-icon @(_activeDemoTip=="clear"?"active":"")" @onclick='()=>ToggleDemoTip("clear")'>i</span>
+                </div>
+                <button class="btn-op btn-build" @onclick="DoLoadSample" disabled="@_busy">
+                    Загрузить пример
+                </button>
+            </div>
+
+            <DemoOpHints ActiveTip="@_activeDemoTip" OnToggle="@((id) => { _activeDemoTip = id; StateHasChanged(); })" />
+
+            <BulkGeneratePanel Disabled="@_busy" OnInsert="BulkInsertAsync" />
+
+            <div class="ctrl-info">
+                <div class="ctrl-info-row">
+                    <span>Count()</span>
+                    <span class="ctrl-info-val">@_count</span>
+                </div>
+                <div class="ctrl-info-row">
+                    <span>Высота</span>
+                    <span class="ctrl-info-val">@_height</span>
+                </div>
+                <div class="ctrl-info-row">
+                    <span>Чёрная высота</span>
+                    <span class="ctrl-info-val">@_blackHeight</span>
+                </div>
+                <div class="ctrl-info-row">
+                    <span>Шагов поиска</span>
+                    <span class="ctrl-info-val">@(_searchSteps > 0 ? _searchSteps.ToString() : "—")</span>
+                </div>
+                <div class="ctrl-info-row">
+                    <span>Результат</span>
+                    <span class="ctrl-info-val">@(_result ?? "—")</span>
+                </div>
+            </div>
+
+            <div class="ctrl-legend">
+                <div class="legend-title">Легенда</div>
+                <div class="legend-row">
+                    <span class="rbt-swatch rbt-swatch-black"></span>
+                    <span>Чёрный узел</span>
+                </div>
+                <div class="legend-row">
+                    <span class="rbt-swatch rbt-swatch-red"></span>
+                    <span>Красный узел</span>
+                </div>
+                <div class="legend-row">
+                    <svg width="28" height="18" style="margin-right:6px;flex-shrink:0;">
+                        <rect x="1" y="3" width="26" height="12"
+                              rx="2" ry="2"
+                              fill="#e8edf5" stroke="#445566" stroke-width="1"/>
+                        <text x="14" y="13" text-anchor="middle"
+                              font-family="monospace" font-size="7" font-weight="bold"
+                              fill="#445566">NIL</text>
+                    </svg>
+                    <span>NIL (чёрный страж)</span>
+                </div>
+                <div class="legend-row">
+                    <span class="rbt-swatch rbt-swatch-scanning"></span>
+                    <span>Путь поиска</span>
+                </div>
+                <div class="legend-row">
+                    <span class="rbt-swatch rbt-swatch-hit"></span>
+                    <span>Найден / добавлен</span>
+                </div>
+                <div class="legend-row">
+                    <span class="rbt-swatch rbt-swatch-miss"></span>
+                    <span>Не найден</span>
+                </div>
+                <div style="margin-top:8px;font-family:var(--font-ui);font-size:10px;color:var(--text-3);line-height:1.4;">
+                    Цвет узла — реальный цвет КЧД. Чёрная высота одинакова для всех путей до NIL.
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Visualization + Log ───────────────────────────────────── -->
+        <div class="demo-main">
+            <div class="rbt-tree-wrap">
+                @if (_count == 0)
+                {
+                    <div class="rbt-empty-state">
+                        <div>Дерево пустое.</div>
+                        <div style="font-size:11px;margin-top:4px;">Добавьте элементы или нажмите <strong>Загрузить пример</strong>.</div>
+                    </div>
+                }
+                else
+                {
+                    <div style="overflow-x:auto;overflow-y:hidden;">
+                        <svg viewBox="0 0 @Fmt(_svgW) @Fmt(_svgH)"
+                             width="@Fmt(_svgW)" height="@Fmt(_svgH)"
+                             xmlns="http://www.w3.org/2000/svg"
+                             style="display:block;">
+
+                            <!-- Edges -->
+                            @foreach (var e in _edges)
+                            {
+                                bool onPath = _animPathEdges.Contains((e.FromKey, e.ToKey));
+                                <line x1="@Fmt(e.X1)" y1="@Fmt(e.Y1)"
+                                      x2="@Fmt(e.X2)" y2="@Fmt(e.Y2)"
+                                      stroke="@(onPath ? "#cc8800" : "#9aafcc")"
+                                      stroke-width="@(onPath ? "3" : "1.5")"
+                                      stroke-dasharray="@(onPath ? "6,3" : "none")"/>
+                            }
+
+                            <!-- NIL edges -->
+                            @foreach (var e in _nilEdges)
+                            {
+                                <line x1="@Fmt(e.X1)" y1="@Fmt(e.Y1)"
+                                      x2="@Fmt(e.X2)" y2="@Fmt(e.Y2)"
+                                      stroke="#8899aa" stroke-width="1"
+                                      stroke-dasharray="4,3"/>
+                            }
+
+                            <!-- NIL sentinel nodes (narrow black-style rectangles) -->
+                            @foreach (var nil in _nilNodes)
+                            {
+                                double nw = 56, nh = 30;
+                                var rx  = Fmt(nil.X - nw / 2);
+                                var ry  = Fmt(nil.Y - nh / 2);
+                                var cx  = Fmt(nil.X);
+                                var ty  = Fmt(nil.Y + 5);
+                                <g>
+                                    <rect x="@rx" y="@ry" width="@Fmt(nw)" height="@Fmt(nh)"
+                                          rx="3" ry="3"
+                                          fill="#e8edf5" stroke="#445566" stroke-width="1"/>
+                                    <text x="@cx" y="@ty" text-anchor="middle"
+                                          font-family="'Courier New',Courier,monospace"
+                                          font-size="11" font-weight="bold"
+                                          fill="#445566">NIL</text>
+                                </g>
+                            }
+
+                            <!-- Nodes -->
+                            @foreach (var node in _visNodes)
+                            {
+                                var rx    = Fmt(node.X - NW / 2);
+                                var ry    = Fmt(node.Y - NH / 2);
+                                var cx    = Fmt(node.X);
+                                var ty1   = Fmt(node.Y - 6);
+                                var divY  = Fmt(node.Y + 1);
+                                var ty2   = Fmt(node.Y + 13);
+                                var lx1   = Fmt(node.X - NW / 2 + 5);
+                                var lx2   = Fmt(node.X + NW / 2 - 5);
+                                var st    = GetNodeState(node.Key);
+
+                                // Determine fill/stroke from animation state + node color
+                                string fill, stroke, sw, textFill, valFill;
+                                switch (st)
+                                {
+                                    case NodeState.Scanning:
+                                        fill="#fffacc"; stroke="#cc8800"; sw="2.5";
+                                        textFill="#554400"; valFill="#776600";
+                                        break;
+                                    case NodeState.Hit:
+                                        fill="#ddf4dd"; stroke="#008800"; sw="2.5";
+                                        textFill="#003300"; valFill="#005500";
+                                        break;
+                                    case NodeState.Miss:
+                                        fill="#f4dddd"; stroke="#880000"; sw="2.5";
+                                        textFill="#440000"; valFill="#660000";
+                                        break;
+                                    default:
+                                        if (node.Color == RbColor.Red)
+                                        {
+                                            fill="#fde8e8"; stroke="#cc3333"; sw="1.5";
+                                            textFill="#5c1010"; valFill="#8b1919";
+                                        }
+                                        else
+                                        {
+                                            fill="#e8edf5"; stroke="#445566"; sw="1";
+                                            textFill="#1a2533"; valFill="#445566";
+                                        }
+                                        break;
+                                }
+
+                                <g>
+                                    <rect x="@rx" y="@ry" width="@NW" height="@NH"
+                                          rx="3" ry="3"
+                                          fill="@fill" stroke="@stroke" stroke-width="@sw"/>
+                                    <text x="@cx" y="@ty1" text-anchor="middle"
+                                          font-family="'Courier New',Courier,monospace"
+                                          font-size="11" font-weight="bold" fill="@textFill">
+                                        @Trunc(node.Key, 14)
+                                    </text>
+                                    <line x1="@lx1" y1="@divY" x2="@lx2" y2="@divY"
+                                          stroke="#cccccc" stroke-width="0.5"/>
+                                    <text x="@cx" y="@ty2" text-anchor="middle"
+                                          font-family="'Courier New',Courier,monospace"
+                                          font-size="10" fill="@valFill">
+                                        @Trunc(node.Value, 14)
+                                    </text>
+                                </g>
+                            }
+                        </svg>
+                    </div>
+
+                    <div class="rbt-tree-note">
+                        <span>Высота: <strong>@_height</strong></span>
+                        <span class="rbt-note-sep">·</span>
+                        <span>Чёрная высота: <strong>@_blackHeight</strong></span>
+                        <span class="rbt-note-sep">·</span>
+                        <span>Узлов: <strong>@_count</strong></span>
+                        @if (_count > 1)
+                        {
+                            <span class="rbt-note-sep">·</span>
+                            <span>Макс. теор. высота: <strong>@((int)Math.Ceiling(2 * Math.Log2(_count + 1)))</strong></span>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- Log -->
+            <div class="ctrl-section-title" style="margin-top:10px;">Журнал операций</div>
+            <div class="demo-log">
+                @foreach (var line in _log)
+                {
+                    <div class="log-line @line.Cls">@line.Text</div>
+                }
+                @if (!_log.Any())
+                {
+                    <span style="color:var(--text-3);font-style:italic;">пусто</span>
+                }
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<style>
+    .rbt-tree-wrap {
+        border: 1px inset #aaaaaa;
+        background: #ffffff;
+        min-height: 80px;
+        padding: 4px;
+        overflow-x: auto;
+    }
+
+    .rbt-empty-state {
+        padding: 24px 16px;
+        color: var(--text-2);
+        font-family: var(--font-ui);
+        font-size: 12px;
+    }
+
+    .rbt-tree-note {
+        font-family: var(--font-ui);
+        font-size: 11px;
+        color: var(--text-3);
+        padding: 4px 2px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+    }
+    .rbt-note-sep { color: var(--border); }
+
+    /* Legend swatches */
+    .rbt-swatch {
+        display: inline-block;
+        width: 22px; height: 12px;
+        border: 1px solid;
+        vertical-align: middle;
+        margin-right: 4px;
+    }
+    .rbt-swatch-black    { background: #e8edf5; border-color: #445566; }
+    .rbt-swatch-red      { background: #fde8e8; border-color: #cc3333; }
+    .rbt-swatch-scanning { background: #fffacc; border-color: #998800; }
+    .rbt-swatch-hit      { background: #ddf4dd; border-color: #008800; }
+    .rbt-swatch-miss     { background: #f4dddd; border-color: #880000; }
+</style>
+
+@code {
+    // ── UI state ──────────────────────────────────────────────────────────
+    private bool    _busy;
+    private string  _keyInput = "";
+    private string  _valInput = "";
+    private string? _result;
+    private int     _count;
+    private int     _height;
+    private int     _blackHeight;
+    private int     _searchSteps;
+    private string? _activeDemoTip;
+
+    private string _status     = "";
+    private string _statusCls  = "";
+    private string _statusIcon = "";
+
+    private record LogLine(string Text, string Cls);
+    private readonly List<LogLine> _log = new();
+    private const int MaxLog = 60;
+
+    // ── Animation ────────────────────────────────────────────────────────
+    private const int StepMs = 380;
+    private enum NodeState { Normal, Scanning, Hit, Miss }
+    private readonly HashSet<string> _animPathKeys = new();
+    private readonly HashSet<(string, string)> _animPathEdges = new();
+    private string? _animHit;
+    private string? _animMiss;
+
+    // ── SVG layout ────────────────────────────────────────────────────────
+    private const double XSpacing = 130;
+    private const double YSpacing = 82;
+    private const double XPad     = 65;
+    private const double YPad     = 46;
+    private const double NW       = 120;
+    private const double NH       = 42;
+    private double _svgW, _svgH;
+
+    private record EdgeInfo(double X1, double Y1, double X2, double Y2, string FromKey, string ToKey);
+    private record VisNode(string Key, string Value, RbColor Color, double X, double Y);
+    private record NilVisNode(double X, double Y);
+
+    private List<VisNode>    _visNodes = new();
+    private List<EdgeInfo>   _edges    = new();
+    private List<NilVisNode> _nilNodes = new();
+    private List<EdgeInfo>   _nilEdges = new();
+
+    // ── Red-Black Tree ────────────────────────────────────────────────────
+    private enum RbColor { Red, Black }
+
+    private class RbtNode
+    {
+        public string  Key   = "";
+        public string  Value = "";
+        public RbColor Color = RbColor.Black;
+        public RbtNode? Left, Right, Parent;
+    }
+
+    private RbtNode _nil  = new() { Color = RbColor.Black };
+    private RbtNode? _root;
+
+    private bool IsNil(RbtNode? n) => n == null || n == _nil;
+
+    // ── RBT: Rotations ───────────────────────────────────────────────────
+
+    private void LeftRotate(RbtNode x)
+    {
+        var y = x.Right!;
+        x.Right = y.Left;
+        if (!IsNil(y.Left)) y.Left!.Parent = x;
+        y.Parent = x.Parent;
+        if (IsNil(x.Parent))        _root = y;
+        else if (x == x.Parent!.Left) x.Parent.Left = y;
+        else                          x.Parent.Right = y;
+        y.Left   = x;
+        x.Parent = y;
+    }
+
+    private void RightRotate(RbtNode y)
+    {
+        var x = y.Left!;
+        y.Left = x.Right;
+        if (!IsNil(x.Right)) x.Right!.Parent = y;
+        x.Parent = y.Parent;
+        if (IsNil(y.Parent))        _root = x;
+        else if (y == y.Parent!.Left) y.Parent.Left = x;
+        else                          y.Parent.Right = x;
+        x.Right  = y;
+        y.Parent = x;
+    }
+
+    // ── RBT: Insert ──────────────────────────────────────────────────────
+
+    /// <returns>true if inserted (new key), false if key already existed (no-op)</returns>
+    private bool RbtInsert(string key, string value)
+    {
+        // Search for existing key
+        var existing = RbtSearch(_root, key);
+        if (existing != null && !IsNil(existing))
+        {
+            return false; // duplicate
+        }
+
+        var z = new RbtNode { Key = key, Value = value, Color = RbColor.Red,
+                              Left = _nil, Right = _nil, Parent = _nil };
+        RbtNode? y = _nil;
+        var x = _root ?? _nil;
+
+        while (!IsNil(x))
+        {
+            y = x;
+            int cmp = string.Compare(key, x!.Key, StringComparison.Ordinal);
+            x = cmp < 0 ? x.Left! : x.Right!;
+        }
+
+        z.Parent = y;
+        if (IsNil(y))         _root = z;
+        else if (string.Compare(key, y!.Key, StringComparison.Ordinal) < 0) y.Left = z;
+        else                  y.Right = z;
+
+        InsertFixup(z);
+        return true;
+    }
+
+    private void InsertFixup(RbtNode z)
+    {
+        while (z.Parent?.Color == RbColor.Red)
+        {
+            if (z.Parent == z.Parent?.Parent?.Left)
+            {
+                var y = z.Parent.Parent!.Right!;
+                if (y.Color == RbColor.Red)           // Case 1
+                {
+                    z.Parent.Color           = RbColor.Black;
+                    y.Color                  = RbColor.Black;
+                    z.Parent.Parent!.Color   = RbColor.Red;
+                    z = z.Parent.Parent!;
+                }
+                else
+                {
+                    if (z == z.Parent.Right)           // Case 2
+                    {
+                        z = z.Parent;
+                        LeftRotate(z);
+                    }
+                    z.Parent!.Color          = RbColor.Black; // Case 3
+                    z.Parent.Parent!.Color   = RbColor.Red;
+                    RightRotate(z.Parent.Parent!);
+                }
+            }
+            else
+            {
+                var y = z.Parent!.Parent!.Left!;
+                if (y.Color == RbColor.Red)           // Case 1 mirror
+                {
+                    z.Parent.Color           = RbColor.Black;
+                    y.Color                  = RbColor.Black;
+                    z.Parent.Parent!.Color   = RbColor.Red;
+                    z = z.Parent.Parent!;
+                }
+                else
+                {
+                    if (z == z.Parent.Left)            // Case 2 mirror
+                    {
+                        z = z.Parent;
+                        RightRotate(z);
+                    }
+                    z.Parent!.Color          = RbColor.Black; // Case 3 mirror
+                    z.Parent.Parent!.Color   = RbColor.Red;
+                    LeftRotate(z.Parent.Parent!);
+                }
+            }
+            if (z == _root) break;
+        }
+        _root!.Color = RbColor.Black;
+    }
+
+    // ── RBT: InsertOrAssign ───────────────────────────────────────────────
+
+    private void RbtInsertOrAssign(string key, string value)
+    {
+        var existing = RbtSearch(_root, key);
+        if (existing != null && !IsNil(existing))
+        {
+            existing.Value = value;
+            return;
+        }
+        RbtInsert(key, value);
+    }
+
+    // ── RBT: Delete ───────────────────────────────────────────────────────
+
+    private bool RbtDelete(string key)
+    {
+        var z = RbtSearch(_root, key);
+        if (z == null || IsNil(z)) return false;
+
+        var y = z;
+        var yOrigColor = y.Color;
+        RbtNode x;
+
+        if (IsNil(z.Left!))
+        {
+            x = z.Right!;
+            Transplant(z, z.Right!);
+        }
+        else if (IsNil(z.Right!))
+        {
+            x = z.Left!;
+            Transplant(z, z.Left!);
+        }
+        else
+        {
+            y = Minimum(z.Right!);
+            yOrigColor = y.Color;
+            x = y.Right!;
+            if (y.Parent == z)
+            {
+                x.Parent = y;
+            }
+            else
+            {
+                Transplant(y, y.Right!);
+                y.Right         = z.Right;
+                y.Right!.Parent = y;
+            }
+            Transplant(z, y);
+            y.Left         = z.Left;
+            y.Left!.Parent = y;
+            y.Color        = z.Color;
+        }
+
+        if (yOrigColor == RbColor.Black)
+            DeleteFixup(x);
+
+        return true;
+    }
+
+    private void Transplant(RbtNode u, RbtNode v)
+    {
+        if (IsNil(u.Parent!))       _root = v;
+        else if (u == u.Parent!.Left) u.Parent.Left = v;
+        else                          u.Parent.Right = v;
+        v.Parent = u.Parent!;
+    }
+
+    private void DeleteFixup(RbtNode x)
+    {
+        while (x != _root && x.Color == RbColor.Black)
+        {
+            if (x == x.Parent!.Left)
+            {
+                var w = x.Parent.Right!;
+                if (w.Color == RbColor.Red)            // Case 1
+                {
+                    w.Color         = RbColor.Black;
+                    x.Parent.Color  = RbColor.Red;
+                    LeftRotate(x.Parent);
+                    w = x.Parent.Right!;
+                }
+                if (w.Left!.Color == RbColor.Black && w.Right!.Color == RbColor.Black) // Case 2
+                {
+                    w.Color = RbColor.Red;
+                    x = x.Parent;
+                }
+                else
+                {
+                    if (w.Right!.Color == RbColor.Black) // Case 3
+                    {
+                        w.Left!.Color = RbColor.Black;
+                        w.Color       = RbColor.Red;
+                        RightRotate(w);
+                        w = x.Parent!.Right!;
+                    }
+                    w.Color         = x.Parent!.Color;  // Case 4
+                    x.Parent.Color  = RbColor.Black;
+                    w.Right!.Color  = RbColor.Black;
+                    LeftRotate(x.Parent);
+                    x = _root!;
+                }
+            }
+            else // mirror
+            {
+                var w = x.Parent!.Left!;
+                if (w.Color == RbColor.Red)
+                {
+                    w.Color        = RbColor.Black;
+                    x.Parent.Color = RbColor.Red;
+                    RightRotate(x.Parent);
+                    w = x.Parent.Left!;
+                }
+                if (w.Right!.Color == RbColor.Black && w.Left!.Color == RbColor.Black)
+                {
+                    w.Color = RbColor.Red;
+                    x = x.Parent;
+                }
+                else
+                {
+                    if (w.Left!.Color == RbColor.Black)
+                    {
+                        w.Right!.Color = RbColor.Black;
+                        w.Color        = RbColor.Red;
+                        LeftRotate(w);
+                        w = x.Parent!.Left!;
+                    }
+                    w.Color         = x.Parent!.Color;
+                    x.Parent.Color  = RbColor.Black;
+                    w.Left!.Color   = RbColor.Black;
+                    RightRotate(x.Parent);
+                    x = _root!;
+                }
+            }
+        }
+        x.Color = RbColor.Black;
+    }
+
+    // ── RBT: Search ──────────────────────────────────────────────────────
+
+    private RbtNode? RbtSearch(RbtNode? node, string key)
+    {
+        if (node == null || IsNil(node)) return null;
+        int cmp = string.Compare(key, node.Key, StringComparison.Ordinal);
+        if (cmp == 0)  return node;
+        if (cmp < 0)   return RbtSearch(node.Left,  key);
+        return             RbtSearch(node.Right, key);
+    }
+
+    private RbtNode Minimum(RbtNode node)
+    {
+        while (!IsNil(node.Left!)) node = node.Left!;
+        return node;
+    }
+
+    // ── RBT: Metrics ─────────────────────────────────────────────────────
+
+    private int ComputeHeight(RbtNode? node)
+    {
+        if (node == null || IsNil(node)) return 0;
+        return 1 + Math.Max(ComputeHeight(node.Left), ComputeHeight(node.Right));
+    }
+
+    private int ComputeBlackHeight(RbtNode? node)
+    {
+        if (node == null || IsNil(node)) return 1; // NIL counts as black
+        int left  = ComputeBlackHeight(node.Left);
+        return left + (node.Color == RbColor.Black ? 1 : 0);
+    }
+
+    private int CountNodes(RbtNode? node)
+    {
+        if (node == null || IsNil(node)) return 0;
+        return 1 + CountNodes(node.Left) + CountNodes(node.Right);
+    }
+
+    // ── Tree snapshot → SVG layout ────────────────────────────────────────
+
+    private void RebuildLayout()
+    {
+        _visNodes = new();
+        _edges    = new();
+        _nilNodes = new();
+        _nilEdges = new();
+
+        _count       = CountNodes(_root);
+        _height      = ComputeHeight(_root);
+        _blackHeight = _count > 0 ? ComputeBlackHeight(_root) - 1 : 0; // subtract root's own count
+
+        if (_count == 0)
+        {
+            _svgW = 200; _svgH = 120;
+            return;
+        }
+
+        int rank = 0;
+        AssignPositions(_root, ref rank, 0);
+        CollectEdges(_root);
+        CollectNilNodes(_root);
+
+        _svgW = _count * XSpacing;
+        _svgH = YPad * 2 + (_height + 1) * YSpacing + 20;
+    }
+
+    private void AssignPositions(RbtNode? node, ref int rank, int depth)
+    {
+        if (node == null || IsNil(node)) return;
+        AssignPositions(node.Left, ref rank, depth + 1);
+        double x = XPad + rank * XSpacing;
+        double y = YPad + depth * YSpacing;
+        _visNodes.Add(new VisNode(node.Key, node.Value, node.Color, x, y));
+        rank++;
+        AssignPositions(node.Right, ref rank, depth + 1);
+    }
+
+    private void CollectEdges(RbtNode? node)
+    {
+        if (node == null || IsNil(node)) return;
+        var n = _visNodes.FirstOrDefault(v => v.Key == node.Key);
+        if (n == null) return;
+
+        if (!IsNil(node.Left))
+        {
+            var l = _visNodes.FirstOrDefault(v => v.Key == node.Left!.Key);
+            if (l != null) _edges.Add(new(n.X, n.Y, l.X, l.Y, n.Key, l.Key));
+            CollectEdges(node.Left);
+        }
+        if (!IsNil(node.Right))
+        {
+            var r = _visNodes.FirstOrDefault(v => v.Key == node.Right!.Key);
+            if (r != null) _edges.Add(new(n.X, n.Y, r.X, r.Y, n.Key, r.Key));
+            CollectEdges(node.Right);
+        }
+    }
+
+    private void CollectNilNodes(RbtNode? node)
+    {
+        if (node == null || IsNil(node)) return;
+        var n = _visNodes.FirstOrDefault(v => v.Key == node.Key);
+        if (n == null) return;
+
+        if (IsNil(node.Left))
+        {
+            double nx = n.X - 32, ny = n.Y + YSpacing;
+            _nilNodes.Add(new NilVisNode(nx, ny));
+            _nilEdges.Add(new EdgeInfo(n.X, n.Y, nx, ny, n.Key, "NIL_L_" + n.Key));
+        }
+        else
+        {
+            CollectNilNodes(node.Left);
+        }
+
+        if (IsNil(node.Right))
+        {
+            double nx = n.X + 32, ny = n.Y + YSpacing;
+            _nilNodes.Add(new NilVisNode(nx, ny));
+            _nilEdges.Add(new EdgeInfo(n.X, n.Y, nx, ny, n.Key, "NIL_R_" + n.Key));
+        }
+        else
+        {
+            CollectNilNodes(node.Right);
+        }
+    }
+
+    // ── Search path (for animation) ───────────────────────────────────────
+
+    private List<string> FindSearchPath(string key)
+    {
+        var path = new List<string>();
+        var node = _root;
+        while (node != null && !IsNil(node))
+        {
+            path.Add(node.Key);
+            int cmp = string.Compare(key, node.Key, StringComparison.Ordinal);
+            if (cmp == 0) break;
+            node = cmp < 0 ? node.Left : node.Right;
+        }
+        return path;
+    }
+
+    // ── Animation ─────────────────────────────────────────────────────────
+
+    private async Task AnimateSearch(string key, NodeState finalState)
+    {
+        var path = FindSearchPath(key);
+        _animPathKeys.Clear();
+        _animPathEdges.Clear();
+        _animHit  = null;
+        _animMiss = null;
+
+        for (int i = 0; i < path.Count; i++)
+        {
+            if (i > 0) _animPathEdges.Add((path[i - 1], path[i]));
+            _animPathKeys.Add(path[i]);
+
+            bool isLast = i == path.Count - 1;
+            if (isLast)
+            {
+                if      (finalState == NodeState.Hit)  _animHit  = path[i];
+                else if (finalState == NodeState.Miss) _animMiss = path[i];
+            }
+
+            StateHasChanged();
+            await Task.Delay(StepMs);
+        }
+    }
+
+    // ── Operations ───────────────────────────────────────────────────────
+
+    private async Task DoContains()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput)) return;
+        _busy = true;
+        var key   = _keyInput.Trim();
+        var found = RbtSearch(_root, key) != null && !IsNil(RbtSearch(_root, key));
+        Log($"▶ Contains(\"{key}\") → {(found ? "true" : "false")}",
+            found ? "log-ok" : "log-miss");
+
+        await AnimateSearch(key, found ? NodeState.Hit : NodeState.Miss);
+        await Task.Delay(600);
+
+        _result      = found ? "true" : "false";
+        _searchSteps = _animPathKeys.Count;
+        SetStatus(found ? $"Contains(\"{key}\") → true" : $"Contains(\"{key}\") → false",
+                  found ? "status-ok" : "status-err",
+                  found ? "✓" : "✗");
+
+        ClearAnim();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoGet()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput)) return;
+        _busy = true;
+        var key  = _keyInput.Trim();
+        var node = RbtSearch(_root, key);
+        var found = node != null && !IsNil(node);
+        Log(found ? $"▶ Get(\"{key}\") → \"{node!.Value}\""
+                  : $"▶ Get(\"{key}\") → null",
+            found ? "log-ok" : "log-miss");
+
+        await AnimateSearch(key, found ? NodeState.Hit : NodeState.Miss);
+        await Task.Delay(600);
+
+        _result      = found ? node!.Value : "null";
+        _searchSteps = _animPathKeys.Count;
+        SetStatus(found ? $"Get(\"{key}\") → \"{node!.Value}\"" : $"Get(\"{key}\") → null",
+                  found ? "status-ok" : "status-err",
+                  found ? "✓" : "✗");
+
+        ClearAnim();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoAdd()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+
+        // Animate search to insertion point on existing tree
+        await AnimateSearch(key, NodeState.Normal);
+        await Task.Delay(150);
+
+        var ok = RbtInsert(key, val);
+        Log(ok ? $"+ Add(\"{key}\", \"{val}\")"
+               : $"✗ Add(\"{key}\") — дубликат",
+            ok ? "log-ok" : "log-err");
+
+        _searchSteps = _animPathKeys.Count;
+
+        ClearAnim();
+        if (ok)
+        {
+            RebuildLayout();
+            _animHit = key;
+            SetStatus($"Add(\"{key}\", \"{val}\") → ok", "status-ok", "✓");
+            StateHasChanged();
+            await Task.Delay(600);
+        }
+        else
+        {
+            RebuildLayout();
+            _animMiss = key;
+            SetStatus($"Add(\"{key}\") → дубликат", "status-err", "✗");
+            StateHasChanged();
+            await Task.Delay(600);
+        }
+
+        ClearAnim();
+        _result = ok ? "ok" : "dup";
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoInsertOrAssign()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+
+        bool existed = RbtSearch(_root, key) != null && !IsNil(RbtSearch(_root, key));
+        await AnimateSearch(key, NodeState.Normal);
+        await Task.Delay(150);
+
+        RbtInsertOrAssign(key, val);
+        Log($"± InsertOrAssign(\"{key}\", \"{val}\")", "log-ok");
+
+        _searchSteps = _animPathKeys.Count;
+        _result      = existed ? "updated" : "inserted";
+
+        ClearAnim();
+        RebuildLayout();
+        _animHit = key;
+        SetStatus($"InsertOrAssign(\"{key}\", \"{val}\")", "status-ok", "✓");
+        StateHasChanged();
+        await Task.Delay(600);
+
+        ClearAnim();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoRemove()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+
+        await AnimateSearch(key, NodeState.Miss);
+        await Task.Delay(400);
+
+        var ok = RbtDelete(key);
+        Log(ok ? $"− Remove(\"{key}\")"
+               : $"✗ Remove(\"{key}\") — не найден",
+            ok ? "log-ok" : "log-miss");
+
+        _searchSteps = _animPathKeys.Count;
+        _result      = ok ? "ok" : "miss";
+        SetStatus(ok ? $"Remove(\"{key}\") → ok"
+                     : $"Remove(\"{key}\") → не найден",
+                  ok ? "status-ok" : "status-err",
+                  ok ? "✓" : "✗");
+
+        ClearAnim();
+        RebuildLayout();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoClear()
+    {
+        if (_busy) return;
+        _busy = true;
+        _root = null;
+        _result = null; _searchSteps = 0;
+        SetStatus("Clear() — дерево очищено", "status-ok", "✓");
+        Log("⊘ Clear()", "log-op");
+        ClearAnim();
+        RebuildLayout();
+        _busy = false;
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    private async Task DoLoadSample()
+    {
+        if (_busy) return;
+        _busy = true;
+        _root = null;
+        var sample = new[]
+        {
+            ("banana",     "банан"),
+            ("apple",      "яблоко"),
+            ("cherry",     "вишня"),
+            ("dog",        "собака"),
+            ("cat",        "кошка"),
+            ("elderberry", "бузина"),
+            ("fig",        "инжир"),
+            ("grape",      "виноград"),
+            ("hawk",       "ястреб"),
+            ("iris",       "ирис"),
+            ("jasmine",    "жасмин"),
+            ("kiwi",       "киви"),
+        };
+        foreach (var (k, v) in sample)
+            RbtInsert(k, v);
+        SetStatus("Загружен пример — 12 элементов", "status-ok", "✓");
+        Log("Загружен пример (12 элементов)", "log-ok");
+        ClearAnim();
+        RebuildLayout();
+        _busy = false;
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    private async Task BulkInsertAsync(List<(string Key, string Value)> pairs)
+    {
+        _busy = true;
+        int added = 0;
+        foreach (var (k, v) in pairs)
+            if (RbtInsert(k, v)) added++;
+        SetStatus($"Сгенерировано: добавлено {added} из {pairs.Count} элементов", "status-ok", "✓");
+        Log($"Генерация: +{added} элементов", "log-ok");
+        ClearAnim();
+        RebuildLayout();
+        _busy = false;
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+
+    private NodeState GetNodeState(string key)
+    {
+        if (key == _animHit)             return NodeState.Hit;
+        if (key == _animMiss)            return NodeState.Miss;
+        if (_animPathKeys.Contains(key)) return NodeState.Scanning;
+        return NodeState.Normal;
+    }
+
+    private void ClearAnim()
+    {
+        _animPathKeys.Clear();
+        _animPathEdges.Clear();
+        _animHit  = null;
+        _animMiss = null;
+    }
+
+    private void SetStatus(string msg, string cls, string icon)
+    { _status = msg; _statusCls = cls; _statusIcon = icon; }
+
+    private void Log(string text, string cls)
+    {
+        _log.Insert(0, new LogLine(text, cls));
+        if (_log.Count > MaxLog) _log.RemoveAt(_log.Count - 1);
+    }
+
+    private void ToggleDemoTip(string id)
+        => _activeDemoTip = _activeDemoTip == id ? null : id;
+
+    private static string Fmt(double d)
+        => d.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string Trunc(string s, int max)
+        => s.Length <= max ? s : s[..max] + "…";
+}
