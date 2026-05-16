@@ -260,9 +260,40 @@ window.DictoriumInterop = (() => {
     function avlRemove(h, key) {
         return withStr(key, kp => mod._avl_remove(h, kp) === 1);
     }
-    // Snapshot returns malloc'd JSON [[\"k\",\"v\"],...] sorted in-order — must readAndFree.
+    // Snapshot returns malloc'd JSON [["k","v"],...] sorted in-order — must readAndFree.
     function avlSnapshot(h) {
         return readAndFree(mod._avl_snapshot(h));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  SkipListDictionary
+    // ══════════════════════════════════════════════════════════════════════
+
+    function slCreate()    { return mod._sl_create(); }
+    function slFree(h)     { mod._sl_free(h); }
+    function slClear(h)    { mod._sl_clear(h); }
+    function slCount(h)    { return mod._sl_count(h); }
+    function slMaxLevel(h) { return mod._sl_max_level(h); }
+
+    function slContains(h, key) {
+        return withStr(key, kp => mod._sl_contains(h, kp) === 1);
+    }
+    // sl_get returns an internal pointer — use readStr, do NOT free.
+    function slGet(h, key) {
+        return withStr(key, kp => readStr(mod._sl_get(h, kp)));
+    }
+    function slAdd(h, key, val) {
+        return withStr2(key, val, (kp, vp) => mod._sl_add(h, kp, vp) === 1);
+    }
+    function slInsertOrAssign(h, key, val) {
+        withStr2(key, val, (kp, vp) => mod._sl_insert_or_assign(h, kp, vp));
+    }
+    function slRemove(h, key) {
+        return withStr(key, kp => mod._sl_remove(h, kp) === 1);
+    }
+    // Snapshot returns malloc'd JSON [["k","v"],...] sorted — must readAndFree.
+    function slSnapshot(h) {
+        return readAndFree(mod._sl_snapshot(h));
     }
 
     // ── Public API ──────────────────────────────────────────────────────────
@@ -290,5 +321,9 @@ window.DictoriumInterop = (() => {
         avlCreate, avlFree, avlAdd, avlInsertOrAssign,
         avlContains, avlGet, avlRemove, avlClear,
         avlCount, avlHeight, avlSnapshot,
+
+        slCreate, slFree, slAdd, slInsertOrAssign,
+        slContains, slGet, slRemove, slClear,
+        slCount, slMaxLevel, slSnapshot,
     };
 })();

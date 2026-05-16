@@ -427,6 +427,7 @@
             ["linprobe"]   = 0,
             ["perfecthash"]= 0,
             ["avl"]        = 0,
+            ["skiplist"]   = 0,
             ["cuckoo"]     = 0,
         };
 
@@ -436,13 +437,13 @@
         if (_q1 == 3) { scores["chaining"] += 3; scores["linprobe"] += 1; scores["cuckoo"] += 2; scores["avl"] += 2; }
 
         // Q2: ordered traversal
-        if (_q2 == 1) { scores["avl"] += 5; scores["linear"] += 1; }
+        if (_q2 == 1) { scores["avl"] += 5; scores["skiplist"] += 4; scores["linear"] += 1; }
         if (_q2 == 2) { scores["chaining"] += 2; scores["cuckoo"] += 2; scores["perfecthash"] += 2; scores["linprobe"] += 2; }
 
         // Q3: search criticality
         if (_q3 == 1) { scores["cuckoo"] += 4; scores["perfecthash"] += 4; }
         if (_q3 == 2) { scores["chaining"] += 3; scores["linprobe"] += 3; }
-        if (_q3 == 3) { scores["linear"] += 3; scores["avl"] += 2; }
+        if (_q3 == 3) { scores["linear"] += 3; scores["avl"] += 2; scores["skiplist"] += 2; }
 
         // Q4: data size
         if (_q4 == 1) { scores["linear"] += 4; scores["chaining"] += 1; }
@@ -455,6 +456,7 @@
             ["linprobe"]    = "Открытая адресация: кэш-дружественна, быстра при низкой загрузке таблицы.",
             ["perfecthash"] = "Совершенное хэширование: O(1) гарантированно, но только для статичного набора ключей.",
             ["avl"]         = "AVL-дерево: хранит ключи в порядке, позволяет range-запросы, O(log n) на все операции.",
+            ["skiplist"]    = "Список с пропусками: вероятностная структура, O(log n) ожид., проще дерева в реализации.",
             ["cuckoo"]      = "Кукушкино хэширование: O(1) гарантированно при поиске, динамичен, эффективен при больших объёмах.",
         };
 
@@ -464,6 +466,7 @@
             ["linprobe"]    = ("Линейное пробирование",   "LinearProbingDictionary","#228866", "demo/lp"),
             ["perfecthash"] = ("Совершенное хэширование", "PerfectHashDictionary", "#cc6600", "demo/perfecthash"),
             ["avl"]         = ("AVL-дерево",               "AvlDictionary",         "#882288", "demo/avl"),
+            ["skiplist"]    = ("Список с пропусками",     "SkipListDictionary",    "#0e7490", "demo/skiplist"),
             ["cuckoo"]      = ("Кукушкино хэширование",   "CuckooDictionary",      "#cc6600", "demo/cuckoo"),
         };
 
@@ -544,6 +547,7 @@
         "open-hashing"    => "demo/chaining",
         "linear-probing"  => "demo/lp",
         "avl-tree"        => "demo/avl",
+        "skip-list"       => "demo/skiplist",
         "cuckoo-hashing"  => "demo/cuckoo",
         "perfect-hashing" => "demo/perfecthash",
         _                 => null

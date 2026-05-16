@@ -1,4 +1,5 @@
 using Microsoft.JSInterop;
+using System.Linq;
 using System.Text.Json;
 
 namespace DictoriumDemo.Services;
@@ -377,6 +378,53 @@ public class DictoriumJsService(IJSRuntime js)
         return snap;
     }
 
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  SkipListDictionary<string, string>
+    // ══════════════════════════════════════════════════════════════════════════
+
+    public async Task<int> SlCreateAsync()
+        => await js.InvokeAsync<int>("DictoriumInterop.slCreate");
+
+    public async Task SlFreeAsync(int handle)
+        => await js.InvokeVoidAsync("DictoriumInterop.slFree", handle);
+
+    public async Task<bool> SlAddAsync(int handle, string key, string val)
+        => await js.InvokeAsync<bool>("DictoriumInterop.slAdd", handle, key, val);
+
+    public async Task SlInsertOrAssignAsync(int handle, string key, string val)
+        => await js.InvokeVoidAsync("DictoriumInterop.slInsertOrAssign", handle, key, val);
+
+    public async Task<bool> SlContainsAsync(int handle, string key)
+        => await js.InvokeAsync<bool>("DictoriumInterop.slContains", handle, key);
+
+    /// <summary>sl_get returns an internal pointer — not malloc'd, no free.</summary>
+    public async Task<string> SlGetAsync(int handle, string key)
+        => await js.InvokeAsync<string>("DictoriumInterop.slGet", handle, key) ?? string.Empty;
+
+    public async Task<bool> SlRemoveAsync(int handle, string key)
+        => await js.InvokeAsync<bool>("DictoriumInterop.slRemove", handle, key);
+
+    public async Task SlClearAsync(int handle)
+        => await js.InvokeVoidAsync("DictoriumInterop.slClear", handle);
+
+    public async Task<int> SlCountAsync(int handle)
+        => await js.InvokeAsync<int>("DictoriumInterop.slCount", handle);
+
+    public async Task<int> SlMaxLevelAsync(int handle)
+        => await js.InvokeAsync<int>("DictoriumInterop.slMaxLevel", handle);
+
+    /// <summary>Returns sorted snapshot as a flat key-value list.</summary>
+    public async Task<List<DictItem>> SlSnapshotAsync(int handle)
+    {
+        var json = await js.InvokeAsync<string>("DictoriumInterop.slSnapshot", handle);
+        return ParseSnapshot(json);
+    }
+
+    /// <summary>Returns the raw JSON string from sl_snapshot for diagnostics.</summary>
+    public async Task<string> SlSnapshotRawAsync(int handle)
+        => await js.InvokeAsync<string>("DictoriumInterop.slSnapshot", handle) ?? string.Empty;
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static List<DictItem> ParseSnapshot(string json)
@@ -384,11 +432,63 @@ public class DictoriumJsService(IJSRuntime js)
         if (string.IsNullOrEmpty(json) || json == "[]") return new();
         try
         {
-            var rows = JsonSerializer.Deserialize<string[][]>(json)!;
-            return rows.Select(r => new DictItem(r[0], r[1])).ToList();
+            // Format 1: plain array  [["k","v"],...]
+            if (json.TrimStart().StartsWith('['))
+            {
+                var rows = JsonSerializer.Deserialize<string[][]>(json)!;
+                return rows.Select(r => new DictItem(r[0], r[1])).ToList();
+            }
+            // Format 2: object  {"maxLevel":N,"entries":[["k","v"],...]}
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("entries", out var entries))
+            {
+                var list = new List<DictItem>();
+                foreach (var row in entries.EnumerateArray())
+                {
+                    var arr = row.EnumerateArray().ToArray();
+                    if (arr.Length >= 2)
+                        list.Add(new DictItem(arr[0].GetString()!, arr[1].GetString()!));
+                }
+                return list;
+            }
+            return new();
         }
         catch { return new(); }
     }
+
+    /// <summary>
+    /// Parses snapshot JSON (both formats) and also returns maxLevel from the object format.
+    /// Returns (items, maxLevel) — maxLevel is -1 when not available in the JSON.
+    /// </summary>
+    public static (List<DictItem> Items, int MaxLevel) ParseSnapshotWithLevel(string json)
+    {
+        if (string.IsNullOrEmpty(json) || json == "[]") return (new(), -1);
+        try
+        {
+            if (json.TrimStart().StartsWith('['))
+            {
+                var rows = JsonSerializer.Deserialize<string[][]>(json)!;
+                return (rows.Select(r => new DictItem(r[0], r[1])).ToList(), -1);
+            }
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            int maxLevel = root.TryGetProperty("maxLevel", out var ml) ? ml.GetInt32() : -1;
+            var list = new List<DictItem>();
+            if (root.TryGetProperty("entries", out var entries))
+                foreach (var row in entries.EnumerateArray())
+                {
+                    var arr = row.EnumerateArray().ToArray();
+                    if (arr.Length >= 2)
+                        list.Add(new DictItem(arr[0].GetString()!, arr[1].GetString()!));
+                }
+            return (list, maxLevel);
+        }
+        catch { return (new(), -1); }
+    }
+
+    /// <summary>Public accessor used by SkipListDemo.</summary>
+    public static List<DictItem> ParseSnapshotPublic(string json) => ParseSnapshot(json);
 }
 
 /// <summary>A key-value pair returned from the Dictorium WASM snapshot.</summary>

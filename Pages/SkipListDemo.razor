@@ -1,0 +1,807 @@
+@page "/demo/skiplist"
+@inject DictoriumJsService Dtr
+@inject NavigationManager Nav
+
+<PageTitle>SkipListDictionary — Демо — Dictorium</PageTitle>
+
+<div class="page-wrap">
+
+    <div class="breadcrumb">
+        <a href="">Обзор</a>
+        <span class="bc-sep">›</span>
+        <span class="bc-now">SkipListDictionary [LIVE]</span>
+    </div>
+
+    <div class="struct-head-bar">
+        <div class="struct-issue-num" style="color:var(--acc-g)">
+            dtr::SkipListDictionary&lt;string, string&gt; — реальная библиотека Dictorium через WASM
+        </div>
+        <h1 class="struct-h1">Список с пропусками</h1>
+        <div class="struct-en">SkipListDictionary.h · O(log n) ожид. · вероятностная структура данных</div>
+        <p class="struct-description">
+            <strong>Список с пропусками</strong> (Pugh, 1990) — вероятностная структура данных на основе
+            связных списков. Каждый элемент присутствует на уровне&nbsp;0 (полный список), а на каждый
+            следующий уровень попадает с вероятностью&nbsp;½. Многоуровневые «пропуски» дают поиск за
+            <em>O(log&nbsp;n)</em> без сложных ротаций, как у деревьев.
+        </p>
+        <div class="struct-tags">
+            <span class="s-tag">Contains O(log n) ожид.</span>
+            <span class="s-tag">Add O(log n) ожид.</span>
+            <span class="s-tag">Remove O(log n) ожид.</span>
+            <span class="s-tag">Уровни ≈ log₂(n)</span>
+            @if (_wasmReady)
+            {
+                <span class="s-tag" style="color:var(--acc-g);border-color:var(--acc-g)">● WASM готов</span>
+            }
+            else
+            {
+                <span class="s-tag" style="color:var(--acc-r)">○ Загрузка WASM...</span>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="demo-status @_statusCls">
+            <strong>@_statusIcon</strong>&nbsp; @_status
+        </div>
+    }
+
+    @if (!_wasmReady)
+    {
+        <div class="comp-hint">Загрузка WebAssembly модуля Dictorium...</div>
+    }
+    else
+    {
+        <div class="demo-layout">
+
+            <!-- ── Controls ─────────────────────────────────────────── -->
+            <div class="demo-controls">
+                <div class="ctrl-section">
+                    <div class="ctrl-section-title">Ключ (Key)</div>
+                    <input class="search-input" style="width:100%;"
+                           @bind="_keyInput" @bind:event="oninput"
+                           placeholder="apple"
+                           disabled="@_busy" />
+                    <div class="ctrl-section-title" style="margin-top:6px;">Значение (Value)</div>
+                    <input class="search-input" style="width:100%;margin-bottom:0;"
+                           @bind="_valInput" @bind:event="oninput"
+                           placeholder="яблоко"
+                           disabled="@_busy" />
+                </div>
+
+                <div class="ctrl-ops">
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-search" @onclick="DoContains"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                            ▶ Contains(key)
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="contains"?"active":"")" @onclick='()=>ToggleDemoTip("contains")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-search" @onclick="DoGet"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                            ▶ Get(key)
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="get"?"active":"")" @onclick='()=>ToggleDemoTip("get")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-add" @onclick="DoAdd"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                            + Add(key, value)
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="add"?"active":"")" @onclick='()=>ToggleDemoTip("add")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-add" @onclick="DoInsertOrAssign"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                            ± InsertOrAssign(key, value)
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="ioa"?"active":"")" @onclick='()=>ToggleDemoTip("ioa")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-remove" @onclick="DoRemove"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                            − Remove(key)
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="remove"?"active":"")" @onclick='()=>ToggleDemoTip("remove")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-clear" @onclick="DoClear" disabled="@_busy">
+                            ⊘ Clear()
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="clear"?"active":"")" @onclick='()=>ToggleDemoTip("clear")'>i</span>
+                    </div>
+                    <button class="btn-op btn-build" @onclick="DoLoadSample" disabled="@_busy">
+                        Загрузить пример
+                    </button>
+                </div>
+
+                <DemoOpHints ActiveTip="@_activeDemoTip" OnToggle="@((id) => { _activeDemoTip = id; StateHasChanged(); })" />
+
+                <BulkGeneratePanel Disabled="@_busy" OnInsert="BulkInsertAsync" />
+
+                <div class="ctrl-info">
+                    <div class="ctrl-info-row">
+                        <span>Count()</span>
+                        <span class="ctrl-info-val">@_count</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Items (snapshot)</span>
+                        <span class="ctrl-info-val @(_count > 0 && _items.Count == 0 ? "ctrl-info-warn" : "")">
+                            @_items.Count
+                            @if (_count > 0 && _items.Count == 0) { <text> ⚠</text> }
+                        </span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>MaxLevel()</span>
+                        <span class="ctrl-info-val">@_maxLevel</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Шагов поиска</span>
+                        <span class="ctrl-info-val">@(_searchSteps > 0 ? _searchSteps.ToString() : "—")</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Результат</span>
+                        <span class="ctrl-info-val">@(_result ?? "—")</span>
+                    </div>
+                </div>
+
+                <div class="ctrl-legend">
+                    <div class="legend-title">Легенда</div>
+                    <div class="legend-row">
+                        <span class="sl-legend-swatch sl-swatch-normal"></span>
+                        <span>Узел (уровень 0)</span>
+                    </div>
+                    <div class="legend-row">
+                        <span class="sl-legend-swatch sl-swatch-express"></span>
+                        <span>Экспресс-уровень</span>
+                    </div>
+                    <div class="legend-row">
+                        <span class="sl-legend-swatch sl-swatch-scanning"></span>
+                        <span>Просматривается</span>
+                    </div>
+                    <div class="legend-row">
+                        <span class="sl-legend-swatch sl-swatch-hit"></span>
+                        <span>Найден</span>
+                    </div>
+                    <div class="legend-row">
+                        <span class="sl-legend-swatch sl-swatch-miss"></span>
+                        <span>Не найден / удалён</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Visualization ─────────────────────────────────────── -->
+            <div class="demo-main">
+
+                <div class="sl-viz-wrap">
+                    @if (_items.Count == 0 && _count == 0)
+                    {
+                        <div class="sl-empty-state">
+                            <div>Список пустой.</div>
+                            <div style="font-size:11px;margin-top:4px;">Добавьте элементы или нажмите <strong>Загрузить пример</strong>.</div>
+                        </div>
+                    }
+                    else if (_count > 0 && _items.Count == 0)
+                    {
+                        <div class="sl-diag">
+                            <div class="sl-diag-title">⚠ WASM Count=@_count, но snapshot пуст</div>
+                            <div class="sl-diag-raw">Raw JSON: @(string.IsNullOrEmpty(_lastSnapshotJson) ? "(null/empty)" : _lastSnapshotJson[..Math.Min(300, _lastSnapshotJson.Length)])</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- SVG generated entirely in C# — no Blazor/SVG namespace conflicts -->
+                        <div style="overflow-x:auto; width:100%;">
+                            @((MarkupString)_svgMarkup)
+                        </div>
+                    }
+                </div>
+
+                <!-- Log -->
+                <div class="ctrl-section-title" style="margin-top:10px;">Журнал операций</div>
+                <div class="demo-log">
+                    @foreach (var line in _log)
+                    {
+                        <div class="log-line @line.Cls">@line.Text</div>
+                    }
+                    @if (!_log.Any())
+                    {
+                        <span style="color:var(--text-3);font-style:italic;">пусто</span>
+                    }
+                </div>
+            </div>
+
+        </div>
+    }
+
+</div>
+
+<style>
+    /* Skip list page — local styles */
+    .ctrl-info-warn { color: #e5a000 !important; }
+
+    .sl-viz-wrap {
+        overflow-x: auto;
+        width: 100%;
+    }
+
+    .sl-empty-state {
+        border: 1px inset #aaaaaa;
+        background: var(--bg-alt);
+        padding: 24px 16px;
+        color: var(--text-2);
+        font-family: var(--font-ui);
+        font-size: 12px;
+    }
+
+    .sl-diag {
+        background: rgba(229,160,0,0.08);
+        border: 1px solid #e5a000;
+        border-radius: 6px;
+        padding: 12px 16px;
+        margin: 20px 0;
+    }
+    .sl-diag-title { color: #e5a000; font-weight: 600; margin-bottom: 6px; }
+    .sl-diag-raw   { font-family: monospace; font-size: 11px; word-break: break-all; }
+
+    /* Legend swatches — pastel fills matching AVL style */
+    .sl-legend-swatch {
+        display: inline-block;
+        width: 22px; height: 12px;
+        border: 1px solid;
+        vertical-align: middle;
+        margin-right: 4px;
+    }
+    .sl-swatch-normal   { background: #eef2f7; border-color: #8899aa; }
+    .sl-swatch-express  { background: #eef7ee; border-color: #339966; }
+    .sl-swatch-scanning { background: #fffacc; border-color: #998800; }
+    .sl-swatch-hit      { background: #ddf4dd; border-color: #008800; }
+    .sl-swatch-miss     { background: #f4dddd; border-color: #880000; }
+</style>
+
+@code {
+    // ── State ─────────────────────────────────────────────────────────────
+    private int    _handle;
+    private bool   _wasmReady;
+    private bool   _busy;
+    private string _keyInput  = "";
+    private string _valInput  = "";
+    private string? _status;
+    private string  _statusCls  = "";
+    private string  _statusIcon = "";
+    private string? _result;
+    private int     _count;
+    private int     _maxLevel;
+    private int     _searchSteps;
+    private string? _activeDemoTip;
+    private string  _lastSnapshotJson = "";
+
+    private const int MaxLog = 40;
+    private record LogLine(string Text, string Cls);
+    private readonly List<LogLine> _log = new();
+
+    // ── Animation state ─────────────────────────────────────────────────
+    private const int StepMs = 380;
+
+    private enum NodeState { Normal, Scanning, Hit, Miss }
+    private readonly HashSet<string> _animScanKeys = new();
+    private string? _animHit;
+    private string? _animMiss;
+
+    // ── Visual model ─────────────────────────────────────────────────────
+    private readonly Dictionary<string, int> _nodeLevels = new();
+    private const int MaxVisLevels = 8;
+    private static readonly Random Rng = new();
+
+    private List<DictItem> _items   = new();
+    private int  _visLevels = 1;
+    private string _svgMarkup = "";   // Entire SVG built in C#
+
+    // Layout constants
+    private const double LabelX    = 24;
+    private const double HeaderX   = 40;
+    private const double SentinelW = 34;
+    private const double NodeW     = 94;
+    private const double NodeH     = 40;
+    private const double LaneGap   = 10;
+    private const double NodeGap   = 16;
+    private const double TailPad   = 86;
+
+    private double LevelY(int lvl, double svgH)
+        => svgH - NodeH - lvl * (NodeH + LaneGap);
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Dtr.InitAsync();
+        _handle    = await Dtr.SlCreateAsync();
+        _wasmReady = true;
+        StateHasChanged();
+    }
+
+    // ── Operations ────────────────────────────────────────────────────────
+
+    private async Task DoContains()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput)) return;
+        _busy = true;
+        var key   = _keyInput.Trim();
+        var found = await Dtr.SlContainsAsync(_handle, key);
+        Log($"▶ Contains(\"{key}\") → {(found ? "true" : "false")}",
+            found ? "log-ok" : "log-miss");
+        await RefreshAndAnimate(key, found ? NodeState.Hit : NodeState.Miss);
+        _result      = found ? "true" : "false";
+        _searchSteps = _animScanKeys.Count;
+        SetStatus(found ? $"Contains(\"{key}\") → true" : $"Contains(\"{key}\") → false",
+                  found ? "status-ok" : "status-err", found ? "✓" : "✗");
+        ClearAnim();
+        BuildSvg();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoGet()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+        var val = await Dtr.SlGetAsync(_handle, key);
+        var found = !string.IsNullOrEmpty(val);
+        Log(found ? $"▶ Get(\"{key}\") → \"{val}\"" : $"▶ Get(\"{key}\") → null",
+            found ? "log-ok" : "log-miss");
+        await RefreshAndAnimate(key, found ? NodeState.Hit : NodeState.Miss);
+        _result      = found ? val : "null";
+        _searchSteps = _animScanKeys.Count;
+        SetStatus(found ? $"Get(\"{key}\") → \"{val}\"" : $"Get(\"{key}\") → null",
+                  found ? "status-ok" : "status-err", found ? "✓" : "✗");
+        ClearAnim();
+        BuildSvg();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoAdd()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+        var ok  = await Dtr.SlAddAsync(_handle, key, val);
+        Log(ok ? $"+ Add(\"{key}\", \"{val}\")" : $"✗ Add(\"{key}\") — дубликат",
+            ok ? "log-ok" : "log-err");
+        _result = ok ? "ok" : "dup";
+        if (ok) _nodeLevels[key] = GenerateNodeLevel();
+        await BuildSnapshot();
+        if (ok) { _animHit = key; BuildSvg(); StateHasChanged(); await Task.Delay(700); }
+        else    { _animMiss = key; BuildSvg(); StateHasChanged(); await Task.Delay(700); }
+        SetStatus(ok ? $"Add(\"{key}\") → ok" : $"Add(\"{key}\") → дубликат",
+                  ok ? "status-ok" : "status-err", ok ? "✓" : "✗");
+        ClearAnim();
+        BuildSvg();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoInsertOrAssign()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+        await Dtr.SlInsertOrAssignAsync(_handle, key, val);
+        if (!_nodeLevels.ContainsKey(key)) _nodeLevels[key] = GenerateNodeLevel();
+        Log($"± InsertOrAssign(\"{key}\", \"{val}\")", "log-ok");
+        _result = "ok";
+        await BuildSnapshot();
+        _animHit = key;
+        BuildSvg();
+        StateHasChanged();
+        await Task.Delay(700);
+        SetStatus($"InsertOrAssign(\"{key}\") → ok", "status-ok", "✓");
+        ClearAnim();
+        BuildSvg();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoRemove()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+        await BuildSnapshot();
+        await AnimateSearch(key, NodeState.Miss);
+        await Task.Delay(300);
+        var ok = await Dtr.SlRemoveAsync(_handle, key);
+        Log(ok ? $"− Remove(\"{key}\")" : $"✗ Remove(\"{key}\") — не найден",
+            ok ? "log-ok" : "log-miss");
+        _result = ok ? "ok" : "miss";
+        _searchSteps = _animScanKeys.Count;
+        if (ok) _nodeLevels.Remove(key);
+        SetStatus(ok ? $"Remove(\"{key}\") → ok" : $"Remove(\"{key}\") → не найден",
+                  ok ? "status-ok" : "status-err", ok ? "✓" : "✗");
+        ClearAnim();
+        await BuildSnapshot();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoClear()
+    {
+        if (_busy) return;
+        _busy = true;
+        await Dtr.SlClearAsync(_handle);
+        _nodeLevels.Clear();
+        _result = null; _searchSteps = 0;
+        SetStatus("Clear() — список очищен", "status-ok", "✓");
+        Log("⊘ Clear()", "log-op");
+        ClearAnim();
+        await BuildSnapshot();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoLoadSample()
+    {
+        if (_busy) return;
+        _busy = true;
+        await Dtr.SlClearAsync(_handle);
+        _nodeLevels.Clear();
+        var sample = new[]
+        {
+            ("banana","банан"), ("apple","яблоко"), ("cherry","вишня"),
+            ("dog","собака"),   ("cat","кошка"),    ("elderberry","бузина"),
+            ("fig","инжир"),    ("grape","виноград"),("hawk","ястреб"),
+            ("iris","ирис"),    ("jasmine","жасмин"),("kiwi","киви"),
+        };
+        int added = 0;
+        foreach (var (k, v) in sample)
+        {
+            var ok = await Dtr.SlAddAsync(_handle, k, v);
+            if (ok) { _nodeLevels[k] = GenerateNodeLevel(); added++; }
+        }
+        Log($"Загружен пример: {added}/12 добавлено", added > 0 ? "log-ok" : "log-err");
+        ClearAnim();
+        await BuildSnapshot();
+        SetStatus($"Загружен пример — {added} элементов", "status-ok", "✓");
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task BulkInsertAsync(List<(string Key, string Value)> pairs)
+    {
+        _busy = true;
+        int added = 0;
+        foreach (var (k, v) in pairs)
+        {
+            if (await Dtr.SlAddAsync(_handle, k, v))
+            { _nodeLevels[k] = GenerateNodeLevel(); added++; }
+        }
+        Log($"Генерация: +{added}/{pairs.Count}", "log-ok");
+        SetStatus($"Добавлено {added} из {pairs.Count}", "status-ok", "✓");
+        ClearAnim();
+        await BuildSnapshot();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    // ── Snapshot ──────────────────────────────────────────────────────────
+
+    private async Task BuildSnapshot()
+    {
+        // Get raw JSON for diagnostics
+        _lastSnapshotJson = await Dtr.SlSnapshotRawAsync(_handle);
+
+        // Parse with new format-aware method — extracts maxLevel from JSON too
+        var (items, jsonMaxLevel) = DictoriumJsService.ParseSnapshotWithLevel(_lastSnapshotJson);
+        _items    = items;
+        _count    = await Dtr.SlCountAsync(_handle);
+        // Use maxLevel from JSON if available; otherwise ask WASM separately
+        _maxLevel = jsonMaxLevel >= 0 ? jsonMaxLevel : await Dtr.SlMaxLevelAsync(_handle);
+
+        // Sync _nodeLevels with current items
+        foreach (var item in _items)
+            if (!_nodeLevels.ContainsKey(item.Key))
+                _nodeLevels[item.Key] = GenerateNodeLevel();
+        var currentKeys = _items.Select(i => i.Key).ToHashSet();
+        foreach (var k in _nodeLevels.Keys.Where(k => !currentKeys.Contains(k)).ToList())
+            _nodeLevels.Remove(k);
+
+        _visLevels = _items.Count > 0
+            ? Math.Max(1, _items.Max(i => _nodeLevels.TryGetValue(i.Key, out var h) ? h : 1))
+            : 1;
+        _visLevels = Math.Min(_visLevels, MaxVisLevels);
+
+        // Log diagnostic if mismatch
+        if (_count > 0 && _items.Count == 0)
+            Log($"⚠ WASM count={_count} но snapshot пуст. JSON: {(string.IsNullOrEmpty(_lastSnapshotJson) ? "null" : _lastSnapshotJson[..Math.Min(80, _lastSnapshotJson.Length)])}", "log-err");
+
+        BuildSvg();
+    }
+
+    // ── Helper: refresh snapshot then animate ─────────────────────────────
+
+    private async Task RefreshAndAnimate(string key, NodeState finalState)
+    {
+        await BuildSnapshot();
+        await AnimateSearch(key, finalState);
+        await Task.Delay(700);
+        BuildSvg();
+        StateHasChanged();
+    }
+
+    // ── Animation ─────────────────────────────────────────────────────────
+
+    private async Task AnimateSearch(string targetKey, NodeState finalState)
+    {
+        _animScanKeys.Clear();
+        _animHit  = null;
+        _animMiss = null;
+        if (_items.Count == 0) return;
+
+        var sorted = _items.OrderBy(i => i.Key, StringComparer.Ordinal).ToList();
+        int curIdx   = -1;
+        int cmpLevel = _visLevels - 1;
+        int steps    = 0;
+
+        while (cmpLevel >= 0)
+        {
+            int nextIdx = -1;
+            for (int i = curIdx + 1; i < sorted.Count; i++)
+            {
+                int h = _nodeLevels.TryGetValue(sorted[i].Key, out var lv) ? lv : 1;
+                if (h > cmpLevel) { nextIdx = i; break; }
+            }
+            if (nextIdx == -1) { cmpLevel--; continue; }
+
+            var item = sorted[nextIdx];
+            int cmp  = string.Compare(targetKey, item.Key, StringComparison.Ordinal);
+
+            _animScanKeys.Add(item.Key);
+            steps++;
+            BuildSvg();
+            StateHasChanged();
+            await Task.Delay(StepMs);
+
+            if (cmp == 0)
+            {
+                if (finalState == NodeState.Hit)  _animHit  = item.Key;
+                if (finalState == NodeState.Miss) _animMiss = item.Key;
+                BuildSvg(); StateHasChanged();
+                break;
+            }
+            else if (cmp > 0) { curIdx = nextIdx; }
+            else
+            {
+                if (cmpLevel == 0 && finalState == NodeState.Miss)
+                { _animMiss = item.Key; BuildSvg(); StateHasChanged(); }
+                cmpLevel--;
+            }
+            if (steps > 80) break;
+        }
+        _searchSteps = steps;
+    }
+
+    // ── SVG builder (pure C#) ─────────────────────────────────────────────
+
+    private void BuildSvg()
+    {
+        if (_items.Count == 0) { _svgMarkup = ""; return; }
+
+        var sorted = _items.OrderBy(i => i.Key, StringComparer.Ordinal).ToList();
+        int n = sorted.Count;
+
+        double startX = HeaderX + SentinelW + NodeGap;
+        double svgW   = startX + n * (NodeW + NodeGap) + TailPad + SentinelW + 10;
+        double svgH   = _visLevels * (NodeH + LaneGap) + 50;
+
+        double sentinelTotalH = _visLevels * NodeH + (_visLevels - 1) * LaneGap;
+        double sentinelY      = LevelY(_visLevels - 1, svgH);   // top of structure
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"<svg viewBox=\"0 0 {F(svgW)} {F(svgH)}\" ");
+        sb.Append($"style=\"width:100%;min-width:{Math.Max(400,(int)svgW)}px;height:auto;display:block;overflow:visible;\" ");
+        sb.Append("xmlns=\"http://www.w3.org/2000/svg\">");
+
+        // ── Defs (arrow markers) ──────────────────────────────────────────
+        sb.Append("<defs>");
+        sb.Append("<marker id=\"sl-arrow\"      markerWidth=\"7\" markerHeight=\"7\" refX=\"6\" refY=\"3.5\" orient=\"auto\"><polygon points=\"0 0,7 3.5,0 7\" fill=\"#8899aa\" opacity=\"0.7\"/></marker>");
+        sb.Append("<marker id=\"sl-arrow-exp\"  markerWidth=\"8\" markerHeight=\"8\" refX=\"7\" refY=\"4\"   orient=\"auto\"><polygon points=\"0 0,8 4,0 8\" fill=\"#339966\" opacity=\"0.8\"/></marker>");
+        sb.Append("<marker id=\"sl-arrow-scan\" markerWidth=\"8\" markerHeight=\"8\" refX=\"7\" refY=\"4\"   orient=\"auto\"><polygon points=\"0 0,8 4,0 8\" fill=\"#cc8800\"/></marker>");
+        sb.Append("<marker id=\"sl-arrow-hit\"  markerWidth=\"8\" markerHeight=\"8\" refX=\"7\" refY=\"4\"   orient=\"auto\"><polygon points=\"0 0,8 4,0 8\" fill=\"#008800\"/></marker>");
+        sb.Append("</defs>");
+
+        // ── SVG background ────────────────────────────────────────────────
+        sb.Append($"<rect x=\"0\" y=\"0\" width=\"{F(svgW)}\" height=\"{F(svgH)}\" fill=\"#ffffff\"/>");
+
+        // ── Level labels ──────────────────────────────────────────────────
+        for (int lv = _visLevels - 1; lv >= 0; lv--)
+        {
+            double cy = LevelY(lv, svgH) + NodeH / 2.0 + 5;
+            sb.Append(T(LabelX, cy, $"L{lv}", 11, "#8899aa", "middle", "monospace"));
+        }
+
+        // ── Lane lines (background dashes) ────────────────────────────────
+        for (int lv = _visLevels - 1; lv >= 0; lv--)
+        {
+            double ly = LevelY(lv, svgH) + NodeH / 2.0;
+            sb.Append($"<line x1=\"{F(HeaderX)}\" y1=\"{F(ly)}\" x2=\"{F(svgW - TailPad)}\" y2=\"{F(ly)}\" stroke=\"rgba(100,120,150,0.15)\" stroke-width=\"1\" stroke-dasharray=\"5 5\"/>");
+        }
+
+        // ── Build node position map ───────────────────────────────────────
+        var nodeX = new Dictionary<string, double>();
+        for (int i = 0; i < sorted.Count; i++)
+            nodeX[sorted[i].Key] = startX + i * (NodeW + NodeGap);
+
+        // ── Forward arrows per level ──────────────────────────────────────
+        for (int lv = 0; lv < _visLevels; lv++)
+        {
+            bool   isExpressLane = lv > 0;
+            double ay   = LevelY(lv, svgH) + NodeH / 2.0;
+            double fromX = HeaderX + SentinelW;
+            string? fromKey = null;
+
+            foreach (var item in sorted)
+            {
+                int h = _nodeLevels.TryGetValue(item.Key, out var lh) ? lh : 1;
+                if (h <= lv) continue;
+                double toX = nodeX[item.Key];
+
+                string markerId = GetArrowMarker(fromKey, item.Key);
+                // For express lanes, use green arrow unless animated
+                if (markerId == "sl-arrow" && isExpressLane) markerId = "sl-arrow-exp";
+
+                double strokeW = markerId switch {
+                    "sl-arrow-scan" => 2.2,
+                    "sl-arrow-hit"  => 2.5,
+                    "sl-arrow-exp"  => 2.0,
+                    _               => 1.4,
+                };
+                string stroke = markerId switch {
+                    "sl-arrow-scan" => "#cc8800",
+                    "sl-arrow-hit"  => "#008800",
+                    "sl-arrow-exp"  => "#339966",
+                    _               => "#8899aa",
+                };
+                double opacity = markerId is "sl-arrow" or "sl-arrow-exp" ? 0.6 : 1.0;
+
+                sb.Append($"<line x1=\"{F(fromX)}\" y1=\"{F(ay)}\" x2=\"{F(toX - 5)}\" y2=\"{F(ay)}\" stroke=\"{stroke}\" stroke-width=\"{F(strokeW)}\" opacity=\"{F(opacity)}\" marker-end=\"url(#{markerId})\"/>");
+                fromX   = toX + NodeW;
+                fromKey = item.Key;
+            }
+            // last → tail
+            double tailX     = svgW - TailPad;
+            string tailArrow = isExpressLane ? "sl-arrow-exp" : "sl-arrow";
+            string tailStroke = isExpressLane ? "#339966" : "#8899aa";
+            sb.Append($"<line x1=\"{F(fromX)}\" y1=\"{F(ay)}\" x2=\"{F(tailX - 5)}\" y2=\"{F(ay)}\" stroke=\"{tailStroke}\" stroke-width=\"{(isExpressLane ? "1.4" : "1.0")}\" opacity=\"0.35\" marker-end=\"url(#{tailArrow})\"/>");
+        }
+
+        // ── Header sentinel ───────────────────────────────────────────────
+        sb.Append($"<rect x=\"{F(HeaderX)}\" y=\"{F(sentinelY)}\" width=\"{F(SentinelW)}\" height=\"{F(sentinelTotalH)}\" rx=\"4\" fill=\"#f0eef8\" stroke=\"#9977bb\" stroke-width=\"1.2\" opacity=\"0.9\"/>");
+        sb.Append(T(HeaderX + SentinelW / 2, sentinelY + sentinelTotalH / 2 + 5, "−∞", 14, "#6644aa", "middle", "monospace"));
+
+        // ── Tail sentinel ─────────────────────────────────────────────────
+        double tailSentX = svgW - TailPad;
+        sb.Append($"<rect x=\"{F(tailSentX)}\" y=\"{F(sentinelY)}\" width=\"{F(SentinelW)}\" height=\"{F(sentinelTotalH)}\" rx=\"4\" fill=\"#f0eef8\" stroke=\"#9977bb\" stroke-width=\"1.2\" opacity=\"0.9\"/>");
+        sb.Append(T(tailSentX + SentinelW / 2, sentinelY + sentinelTotalH / 2 + 5, "+∞", 14, "#6644aa", "middle", "monospace"));
+
+        // ── Nodes ─────────────────────────────────────────────────────────
+        foreach (var item in sorted)
+        {
+            double nx     = nodeX[item.Key];
+            int    height = _nodeLevels.TryGetValue(item.Key, out var nh) ? Math.Min(nh, _visLevels) : 1;
+            var    state  = GetNodeState(item.Key);
+
+            // Vertical connector (tower) — solid, more visible
+            if (height > 1)
+            {
+                double topY = LevelY(height - 1, svgH);
+                double btY  = LevelY(0, svgH) + NodeH;
+                sb.Append($"<line x1=\"{F(nx + NodeW/2)}\" y1=\"{F(topY)}\" x2=\"{F(nx + NodeW/2)}\" y2=\"{F(btY)}\" stroke=\"rgba(50,130,80,0.35)\" stroke-width=\"2\" stroke-dasharray=\"3 2\"/>");
+            }
+
+            // Box per level
+            for (int lv = 0; lv < height; lv++)
+            {
+                double by = LevelY(lv, svgH);
+                bool   isExpress = lv > 0;
+
+                (string fill, string stroke, double sw, double fillOp) = state switch {
+                    NodeState.Hit      => ("#ddf4dd", "#008800", 2.0, 1.0),
+                    NodeState.Miss     => ("#f4dddd", "#880000", 2.0, 1.0),
+                    NodeState.Scanning => ("#fffacc", "#998800", 2.0, 1.0),
+                    _ when isExpress   => ("#eef7ee", "#339966", 1.4, 1.0),
+                    _                  => ("#eef2f7", "#8899aa", 1.0, 1.0),
+                };
+
+                sb.Append($"<rect x=\"{F(nx)}\" y=\"{F(by)}\" width=\"{F(NodeW)}\" height=\"{F(NodeH)}\" rx=\"5\" fill=\"{fill}\" fill-opacity=\"{F(fillOp)}\" stroke=\"{stroke}\" stroke-width=\"{F(sw)}\"/>");
+
+                string textColor = state == NodeState.Normal ? "#111111" : "#111111";
+                if (lv == 0)
+                {
+                    string dimColor = state == NodeState.Normal ? "#556677" : "#004400";
+                    sb.Append(T(nx + NodeW / 2, by + 15, Trunc(item.Key, 9),   11, textColor, "middle", "monospace", "600"));
+                    sb.Append(T(nx + NodeW / 2, by + NodeH - 7, Trunc(item.Value, 9), 9, dimColor, "middle", "monospace"));
+                }
+                else
+                {
+                    // Express lane: show key name so user knows what node this is
+                    string expColor = state == NodeState.Normal ? "#226644" : "#003300";
+                    string badgeClr = state == NodeState.Normal ? "#339966" : "#003300";
+                    sb.Append(T(nx + NodeW / 2, by + NodeH / 2 + 4, Trunc(item.Key, 9), 10, expColor, "middle", "monospace", "600"));
+                    // small Lx badge in top-right corner
+                    sb.Append(T(nx + NodeW - 4, by + 9, $"L{lv}", 7, badgeClr, "end", "monospace"));
+                }
+            }
+        }
+
+        sb.Append("</svg>");
+        _svgMarkup = sb.ToString();
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+
+    private static int GenerateNodeLevel()
+    {
+        int level = 1;
+        while (Rng.NextDouble() < 0.5 && level < MaxVisLevels)
+            level++;
+        return level;
+    }
+
+    private NodeState GetNodeState(string key)
+    {
+        if (key == _animHit)             return NodeState.Hit;
+        if (key == _animMiss)            return NodeState.Miss;
+        if (_animScanKeys.Contains(key)) return NodeState.Scanning;
+        return NodeState.Normal;
+    }
+
+    private string GetArrowMarker(string? fromKey, string toKey)
+    {
+        if (toKey == _animHit)               return "sl-arrow-hit";
+        if (_animScanKeys.Contains(toKey))   return "sl-arrow-scan";
+        return "sl-arrow";
+    }
+
+    private void ClearAnim()
+    {
+        _animScanKeys.Clear();
+        _animHit  = null;
+        _animMiss = null;
+    }
+
+    private void SetStatus(string msg, string cls, string icon)
+    { _status = msg; _statusCls = cls; _statusIcon = icon; }
+
+    private void Log(string text, string cls)
+    {
+        _log.Insert(0, new LogLine(text, cls));
+        if (_log.Count > MaxLog) _log.RemoveAt(_log.Count - 1);
+    }
+
+    private void ToggleDemoTip(string id)
+        => _activeDemoTip = _activeDemoTip == id ? null : id;
+
+    // F() — format double for SVG attributes
+    private static string F(double d)
+        => d.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+
+    // T() — build <text> SVG element as raw string
+    private static string T(double x, double y, string content,
+        int size = 12, string fill = "#dde4ee",
+        string anchor = "middle", string family = "monospace",
+        string weight = "normal")
+    {
+        var esc = System.Net.WebUtility.HtmlEncode(content);
+        return $"<text x=\"{F(x)}\" y=\"{F(y)}\" font-size=\"{size}\" fill=\"{fill}\" " +
+               $"text-anchor=\"{anchor}\" font-family=\"{family}\" font-weight=\"{weight}\">{esc}</text>";
+    }
+
+    private static string Trunc(string s, int max)
+        => s.Length <= max ? s : s[..max] + "…";
+}
