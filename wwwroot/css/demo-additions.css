@@ -782,3 +782,261 @@
 }
 .bulk-gen-ok  { background: #eeffee; border-color: #008800; color: #003300; }
 .bulk-gen-err { background: #ffeeee; border-color: #880000; color: #440000; }
+
+/* ─────────────────────────────────────────────────────────────────
+   Double Hashing — DoubleHashingDemo styles
+   ───────────────────────────────────────────────────────────────── */
+
+/* Hash preview panel in controls */
+.dh-hash-preview {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+
+.dh-preview-title {
+    font-family: var(--font-ui);
+    font-size: 10px;
+    color: var(--text-3);
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.dh-preview-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 3px;
+}
+
+.dh-fn {
+    font-weight: 700;
+    color: var(--text);
+    min-width: 18px;
+}
+
+.dh-fn-formula {
+    color: var(--text-3);
+    font-size: 10px;
+    flex: 1;
+}
+
+.dh-fn-val {
+    font-weight: 700;
+    font-size: 12px;
+}
+
+.dh-preview-formula {
+    margin-top: 5px;
+    padding: 3px 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 10px;
+    color: var(--text-2);
+}
+
+.dh-preview-seq {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-top: 5px;
+    flex-wrap: wrap;
+}
+
+.dh-seq-slot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 18px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    border: 1px solid;
+}
+
+.dh-seq-empty { background: var(--bg-2); border-color: var(--border); color: var(--text-3); }
+.dh-seq-occ   { background: #e6f0e6; border-color: #448844; color: #225522; }
+.dh-seq-del   { background: #f0e6e6; border-color: #884444; color: #552222; }
+
+/* Formula bar */
+.dh-formula-bar {
+    background: var(--bg-2);
+    border: 1px solid var(--border-dk);
+    border-radius: 5px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    font-family: var(--font-mono);
+}
+
+.dh-formula-title {
+    font-family: var(--font-ui);
+    font-size: 10px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+}
+
+.dh-formula-body {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    font-size: 14px;
+}
+
+.dh-formula-slot { font-weight: 700; color: var(--text); }
+.dh-formula-paren { color: var(--text-3); }
+.dh-formula-eq { color: var(--text-2); margin: 0 2px; }
+.dh-formula-op { color: var(--text-3); font-size: 12px; }
+.dh-formula-i  { font-style: italic; color: var(--text-2); }
+.dh-formula-cap { color: var(--text-2); font-size: 12px; }
+
+.dh-formula-part {
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 700;
+}
+
+.dh-formula-part.dh-h1 {
+    background: #ddeeff;
+    color: #0033bb;
+    border: 1px solid #99bbee;
+}
+
+.dh-formula-part.dh-h2 {
+    background: #ddfff0;
+    color: #005533;
+    border: 1px solid #88ddaa;
+}
+
+.dh-formula-instance {
+    margin-top: 7px;
+    padding-top: 7px;
+    border-top: 1px dashed var(--border);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    font-size: 12px;
+}
+
+.dh-inst-slot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 20px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 0 4px;
+    border: 1px solid;
+}
+
+.dh-inst-home { background: #cce0ff; border-color: #0044cc; color: #001188; }
+.dh-inst-hit  { background: #ccffcc; border-color: #008800; color: #003300; }
+.dh-inst-col  { background: #fff0cc; border-color: #cc8800; color: #553300; }
+
+/* Probe step badge on slots */
+.dh-probe-step {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-3);
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 0 3px;
+    min-width: 28px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+/* Explanation comparison panel */
+.dh-explain-panel {
+    font-family: var(--font-ui);
+    font-size: 11px;
+}
+
+.dh-compare-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    padding: 8px 0;
+}
+
+@media (max-width: 700px) {
+    .dh-compare-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.dh-compare-col {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 10px 12px;
+}
+
+.dh-compare-label {
+    font-weight: 700;
+    font-size: 11px;
+    margin-bottom: 4px;
+}
+
+.dh-compare-desc {
+    color: var(--text-3);
+    font-size: 10px;
+    margin-bottom: 8px;
+    font-family: var(--font-mono);
+}
+
+.dh-compare-seq {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-3);
+}
+
+.dh-compare-issue {
+    font-size: 10px;
+    color: var(--acc-r);
+    font-weight: 600;
+}
+
+.dh-ex-slot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 20px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-2);
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.dh-ex-cluster {
+    background: #ffe0cc;
+    border-color: #cc4400;
+    color: #881100;
+}
+
+.dh-ex-good {
+    background: #e0ffee;
+    border-color: #008844;
+    color: #004422;
+}

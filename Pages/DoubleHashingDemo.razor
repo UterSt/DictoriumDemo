@@ -1,0 +1,871 @@
+@page "/demo/dh"
+@inject DictoriumJsService Dtr
+
+<PageTitle>DoubleHashingDictionary — Демо — Dictorium</PageTitle>
+
+<div class="page-wrap">
+
+    <div class="breadcrumb">
+        <a href="">Обзор</a>
+        <span class="bc-sep">›</span>
+        <span class="bc-now">DoubleHashingDictionary [LIVE]</span>
+    </div>
+
+    <div class="struct-head-bar">
+        <div class="struct-issue-num" style="color:var(--acc-g)">
+            dtr::DoubleHashingDictionary&lt;string, string&gt; — симуляция через C# + WASM
+        </div>
+        <h1 class="struct-h1">Двойное хэширование</h1>
+        <div class="struct-en">DoubleHashingDictionary.h · открытая адресация · двойной шаг</div>
+        <p class="struct-description">
+            Открытая адресация с <strong>двумя независимыми хэш-функциями</strong>.
+            При коллизии шаг определяется не константой и не квадратом, а <em>вторым хэшем ключа</em>:
+            <code>slot(i) = (h₁(key) + i · h₂(key)) mod cap</code>.
+            Это <strong>устраняет как первичную, так и вторичную кластеризацию</strong> —
+            каждый ключ получает уникальную probe sequence.
+            h₂ всегда нечётное и не кратно capacity, что гарантирует обход всей таблицы.
+        </p>
+        <div class="struct-tags">
+            <span class="s-tag">ContainsKey O(1) avg</span>
+            <span class="s-tag">Add O(1) avg</span>
+            <span class="s-tag">Remove O(1) avg</span>
+            <span class="s-tag">α &lt; 0.7 рекомендуется</span>
+            <span class="s-tag">h₁(k) = djb2(k) mod m</span>
+            <span class="s-tag">h₂(k) = 1 + sdbm(k) mod (m−1)</span>
+            @if (_wasmReady)
+            {
+                <span class="s-tag" style="color:var(--acc-g);border-color:var(--acc-g)">● WASM готов</span>
+            }
+            else
+            {
+                <span class="s-tag" style="color:var(--acc-r)">○ Загрузка WASM...</span>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="demo-status @_statusCls">
+            <strong>@_statusIcon</strong>&nbsp; @_status
+        </div>
+    }
+
+    @if (!_wasmReady)
+    {
+        <div class="comp-hint">Загрузка WebAssembly модуля Dictorium...</div>
+    }
+    else
+    {
+        <div class="demo-layout">
+
+            <!-- ── Controls ── -->
+            <div class="demo-controls">
+
+                <div class="ctrl-section">
+                    <div class="ctrl-section-title">Ключ (Key)</div>
+                    <input class="search-input" style="width:100%;"
+                           @bind="_keyInput" @bind:event="oninput"
+                           placeholder="apple"
+                           disabled="@_busy" />
+                    <div class="ctrl-section-title" style="margin-top:6px;">Значение (Value)</div>
+                    <input class="search-input" style="width:100%;margin-bottom:0;"
+                           @bind="_valInput" @bind:event="oninput"
+                           placeholder="яблоко"
+                           disabled="@_busy" />
+                </div>
+
+                <!-- Hash preview panel -->
+                @if (!string.IsNullOrWhiteSpace(_keyInput))
+                {
+                    var previewKey = _keyInput.Trim();
+                    int ph1 = DhH1(previewKey, _table.Length);
+                    int ph2 = DhH2(previewKey, _table.Length);
+                    <div class="dh-hash-preview">
+                        <div class="dh-preview-title">Хэши для «@TruncStr(previewKey, 10)»</div>
+                        <div class="dh-preview-row">
+                            <span class="dh-fn">h₁</span>
+                            <span class="dh-fn-formula">djb2 mod @_table.Length</span>
+                            <span class="dh-fn-val" style="color:var(--acc-b)">= @ph1</span>
+                        </div>
+                        <div class="dh-preview-row">
+                            <span class="dh-fn">h₂</span>
+                            <span class="dh-fn-formula">1 + sdbm mod @(_table.Length - 1)</span>
+                            <span class="dh-fn-val" style="color:var(--acc-g)">= @ph2</span>
+                        </div>
+                        <div class="dh-preview-formula">
+                            slot(i) = (@ph1 + i·@ph2) mod @_table.Length
+                        </div>
+                        <div class="dh-preview-seq">
+                            <span style="font-size:10px;color:var(--text-3);margin-right:4px;">seq:</span>
+                            @{
+                                var previewSeq = new List<int>();
+                                for (int pi = 0; pi < Math.Min(6, _table.Length); pi++)
+                                    previewSeq.Add((ph1 + pi * ph2) % _table.Length);
+                            }
+                            @for (int pi = 0; pi < previewSeq.Count; pi++)
+                            {
+                                @if (pi > 0) { <span style="color:var(--text-3)">→</span> }
+                                <span class="dh-seq-slot @(_table[previewSeq[pi]].State == DhSlotState.Empty ? "dh-seq-empty" : _table[previewSeq[pi]].State == DhSlotState.Deleted ? "dh-seq-del" : "dh-seq-occ")">
+                                    @previewSeq[pi]
+                                </span>
+                            }
+                            @if (previewSeq.Count < _table.Length)
+                            {
+                                <span style="color:var(--text-3);font-size:10px;">…</span>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <div class="ctrl-ops">
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-search" @onclick="DoContains"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                            ▶ ContainsKey(key)
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="contains"?"active":"")" @onclick='()=>ToggleDemoTip("contains")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-search" @onclick="DoGet"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                            ▶ TryGetValue(key)
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="get"?"active":"")" @onclick='()=>ToggleDemoTip("get")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-add" @onclick="DoAdd"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                            + Add(key, value)
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="add"?"active":"")" @onclick='()=>ToggleDemoTip("add")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-add" @onclick="DoInsertOrAssign"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                            ± InsertOrAssign(key, value)
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="ioa"?"active":"")" @onclick='()=>ToggleDemoTip("ioa")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-remove" @onclick="DoRemove"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                            − Remove(key)
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="remove"?"active":"")" @onclick='()=>ToggleDemoTip("remove")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-clear" @onclick="DoClear" disabled="@_busy">
+                            ⊘ Clear()
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="clear"?"active":"")" @onclick='()=>ToggleDemoTip("clear")'>i</span>
+                    </div>
+                </div>
+
+                <DemoOpHints ActiveTip="@_activeDemoTip" OnToggle="@((id) => { _activeDemoTip = id; StateHasChanged(); })" />
+
+                <div class="ctrl-info">
+                    <div class="ctrl-info-row">
+                        <span>Count</span>
+                        <span class="ctrl-info-val">@_count</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Capacity</span>
+                        <span class="ctrl-info-val">@_table.Length</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Загрузка (α)</span>
+                        <span class="ctrl-info-val">@LoadFactor.ToString("F2")</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Tombstones</span>
+                        <span class="ctrl-info-val">@TombstoneCount</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Шагов последнего probe</span>
+                        <span class="ctrl-info-val">@(_lastProbePath.Count > 0 ? _lastProbePath.Count.ToString() : "—")</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>h₁ (home)</span>
+                        <span class="ctrl-info-val" style="color:var(--acc-b)">@(_lastH1 >= 0 ? _lastH1.ToString() : "—")</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>h₂ (шаг)</span>
+                        <span class="ctrl-info-val" style="color:var(--acc-g)">@(_lastH2 >= 0 ? _lastH2.ToString() : "—")</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Результат</span>
+                        <span class="ctrl-info-val">@_result</span>
+                    </div>
+                </div>
+
+                <div class="ctrl-legend">
+                    <div class="legend-title">Легенда</div>
+                    <div class="legend-row">
+                        <span class="lp-legend-dot lp-dot-empty"></span> Пустой слот
+                    </div>
+                    <div class="legend-row">
+                        <span class="lp-legend-dot lp-dot-occ"></span> Занятый слот
+                    </div>
+                    <div class="legend-row">
+                        <span class="lp-legend-dot lp-dot-del"></span> Tombstone (удалён)
+                    </div>
+                    <div class="legend-row">
+                        <span class="lp-legend-dot lp-dot-probe"></span> Пробируется
+                    </div>
+                    <div class="legend-row">
+                        <span class="lp-legend-dot lp-dot-col"></span> Коллизия (пропуск)
+                    </div>
+                    <div class="legend-row" style="font-size:10px;color:var(--text-3);margin-top:4px;">
+                        <span style="border-left:3px solid #0044cc;padding-left:4px;">home</span>
+                        &nbsp;— начало probe sequence (h₁)
+                    </div>
+                </div>
+
+                <div class="ctrl-section">
+                    <div class="ctrl-section-title">Быстрая загрузка</div>
+                    <button class="btn-op" @onclick="LoadSample" disabled="@_busy">
+                        Загрузить пример
+                    </button>
+                </div>
+
+                <BulkGeneratePanel Disabled="@_busy" OnInsert="BulkInsertAsync" />
+
+            </div>
+
+            <!-- ── Main visualisation ── -->
+            <div class="demo-main">
+
+                <!-- Formula bar -->
+                <div class="dh-formula-bar">
+                    <div class="dh-formula-title">Probe sequence формула:</div>
+                    <div class="dh-formula-body">
+                        <span class="dh-formula-slot">slot</span>
+                        <span class="dh-formula-paren">(i)</span>
+                        <span class="dh-formula-eq">=</span>
+                        <span class="dh-formula-part dh-h1">h₁(key)</span>
+                        <span class="dh-formula-op">+</span>
+                        <span class="dh-formula-i">i</span>
+                        <span class="dh-formula-op">·</span>
+                        <span class="dh-formula-part dh-h2">h₂(key)</span>
+                        <span class="dh-formula-op">mod</span>
+                        <span class="dh-formula-cap">capacity</span>
+                    </div>
+                    @if (_lastH1 >= 0)
+                    {
+                        <div class="dh-formula-instance">
+                            <span style="color:var(--acc-b)">h₁=@_lastH1</span>
+                            <span style="color:var(--text-3);margin:0 4px">·</span>
+                            <span style="color:var(--acc-g)">h₂=@_lastH2</span>
+                            <span style="color:var(--text-3);margin:0 4px">·</span>
+                            <span style="color:var(--text-2)">cap=@_table.Length</span>
+                            <span style="color:var(--text-3);margin:0 4px">→</span>
+                            @for (int fi = 0; fi < Math.Min(5, _lastProbePath.Count); fi++)
+                            {
+                                if (fi > 0) { <span style="color:var(--text-3)">→</span> }
+                                <span class="dh-inst-slot @(fi == _lastProbePath.Count - 1 && _lastProbeHit ? "dh-inst-hit" : fi == 0 ? "dh-inst-home" : "dh-inst-col")">
+                                    @_lastProbePath[fi]
+                                </span>
+                            }
+                            @if (_lastProbePath.Count > 5)
+                            {
+                                <span style="color:var(--text-3);font-size:10px">…</span>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="viz-section">
+                    <div class="viz-section-head">
+                        <span class="viz-section-title">Хэш-таблица — двойное хэширование</span>
+                        <span class="viz-section-info">
+                            @_table.Length слотов · @_count элементов
+                            @if (TombstoneCount > 0)
+                            {
+                                <span> · @TombstoneCount tombstone</span>
+                            }
+                        </span>
+                    </div>
+
+                    <div class="lp-table-wrap" style="position:relative;padding-left:16px;">
+                        @for (int si = 0; si < _table.Length; si++)
+                        {
+                            var slot = _table[si];
+                            string rowCls  = GetSlotAnimCls(si);
+                            bool   isHome  = si == _probeHome && _probeHome >= 0;
+                            bool   isProbe = _probeCursor == si;
+
+                            <div class="lp-slot-row @rowCls @(isHome ? "lp-home" : "")">
+                                @if (isProbe)
+                                {
+                                    <div class="lp-probe-arrow">▶</div>
+                                }
+
+                                <div class="lp-slot-idx">[@si]</div>
+
+                                <div class="lp-slot-state">
+                                    @switch (slot.State)
+                                    {
+                                        case DhSlotState.Empty:
+                                            <span class="lp-state-empty">○</span>
+                                            break;
+                                        case DhSlotState.Occupied:
+                                            <span class="lp-state-occ">●</span>
+                                            break;
+                                        case DhSlotState.Deleted:
+                                            <span class="lp-state-del">✕</span>
+                                            break;
+                                    }
+                                </div>
+
+                                <!-- Probe step indicator -->
+                                @{
+                                    int probeStep = _lastProbePath.IndexOf(si);
+                                }
+                                @if (probeStep >= 0 && _lastProbePath.Count > 0)
+                                {
+                                    <div class="dh-probe-step" title="probe step @probeStep, offset = @probeStep·@_lastH2 = @(probeStep * _lastH2)">
+                                        i=@probeStep
+                                    </div>
+                                }
+
+                                <div class="lp-slot-body">
+                                    @if (isHome)
+                                    {
+                                        <span class="lp-home-badge">h₁=@_lastH1</span>
+                                    }
+                                    @switch (slot.State)
+                                    {
+                                        case DhSlotState.Empty:
+                                            <span class="lp-slot-null">— пусто —</span>
+                                            break;
+                                        case DhSlotState.Deleted:
+                                            <span class="lp-slot-del-label">tombstone</span>
+                                            break;
+                                        case DhSlotState.Occupied:
+                                            <span class="lp-slot-key" title="@slot.Key">@TruncStr(slot.Key, 12)</span>
+                                            <span class="lp-slot-sep">→</span>
+                                            <span class="lp-slot-val" title="@slot.Value">@TruncStr(slot.Value, 12)</span>
+                                            break;
+                                    }
+                                </div>
+
+                                @if (slot.State == DhSlotState.Occupied && slot.HomeSlot >= 0 && slot.HomeSlot != si)
+                                {
+                                    <div class="lp-slot-hash">h₁=@slot.HomeSlot</div>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    @if (_count == 0)
+                    {
+                        <div style="text-align:center;padding:8px;font-family:var(--font-ui);
+                                    font-size:11px;color:var(--text-3);border:1px dotted var(--border);
+                                    margin-bottom:6px;">
+                            Таблица инициализирована · все @_table.Length слотов пусты
+                        </div>
+                    }
+
+                    <!-- Stats bar -->
+                    <div class="lp-stats-bar">
+                        <div class="lp-stat-item">
+                            <span class="lp-stat-label">Загрузка α = n / cap</span>
+                            <div class="lp-load-bar-wrap">
+                                <div class="lp-load-bar @LoadBarWarnCls" style="@LoadBarStyle"></div>
+                                <span class="lp-load-val">@LoadFactor.ToString("F2")</span>
+                            </div>
+                        </div>
+                        @if (_lastProbePath.Count > 0)
+                        {
+                            <div class="lp-stat-item">
+                                <span class="lp-stat-label">Последний probe sequence (шаг h₂=@_lastH2)</span>
+                                <div class="lp-probe-trail">
+                                    @for (int pi = 0; pi < _lastProbePath.Count; pi++)
+                                    {
+                                        int slotIdx = _lastProbePath[pi];
+                                        string trailCls = pi == 0 ? "lp-trail-home"
+                                            : pi == _lastProbePath.Count - 1 && _lastProbeHit ? "lp-trail-hit"
+                                            : _table[slotIdx].State == DhSlotState.Deleted ? "lp-trail-del"
+                                            : "lp-trail-col";
+                                        @if (pi > 0)
+                                        {
+                                            <span class="lp-trail-arrow">→</span>
+                                        }
+                                        <span class="lp-trail-slot @trailCls" title="i=@pi, offset=@(pi*_lastH2)">[@slotIdx]</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Log -->
+                <div class="viz-section" style="margin-top:8px;">
+                    <div class="viz-section-head">
+                        <span class="viz-section-title">Лог операций</span>
+                        <button class="btn-op btn-clear"
+                                style="padding:1px 6px;font-size:10px;width:auto;"
+                                @onclick="ClearLog">
+                            очистить
+                        </button>
+                    </div>
+                    <div class="demo-log">
+                        @if (_log.Count == 0)
+                        {
+                            <div class="log-line log-miss">// нет операций</div>
+                        }
+                        else
+                        {
+                            @for (int li = _log.Count - 1; li >= 0; li--)
+                            {
+                                <div class="log-line @_log[li].Cls">@_log[li].Text</div>
+                            }
+                        }
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    // ── Slot model ─────────────────────────────────────────────────────────────
+    private enum DhSlotState { Empty, Occupied, Deleted }
+
+    private class DhSlot
+    {
+        public DhSlotState State    { get; set; } = DhSlotState.Empty;
+        public string       Key     { get; set; } = string.Empty;
+        public string       Value   { get; set; } = string.Empty;
+        public int          HomeSlot { get; set; } = -1;
+    }
+
+    // ── State ─────────────────────────────────────────────────────────────────
+    private string? _activeDemoTip = null;
+    private void ToggleDemoTip(string id) => _activeDemoTip = _activeDemoTip == id ? null : id;
+
+    private bool _wasmReady;
+    private bool _busy;
+
+    // Hash table state (pure C# simulation)
+    private DhSlot[] _table = new DhSlot[11];
+    private int      _count;
+
+    // Animation
+    private int       _probeCursor  = -1;
+    private int       _probeHome    = -1;
+    private List<int> _lastProbePath = new();
+    private bool      _lastProbeHit;
+    private int       _lastH1       = -1;
+    private int       _lastH2       = -1;
+
+    private Dictionary<int, string> _slotAnimMap = new();
+
+    private string _keyInput   = string.Empty;
+    private string _valInput   = string.Empty;
+    private string _status     = string.Empty;
+    private string _statusCls  = string.Empty;
+    private string _statusIcon = string.Empty;
+    private string _result     = "—";
+
+    private readonly List<LogEntry> _log = new();
+    private struct LogEntry { public string Text; public string Cls; }
+
+    private const int StepMs = 280;
+
+    // ── Computed ──────────────────────────────────────────────────────────────
+    private double LoadFactor     => _table.Length > 0 ? (double)_count / _table.Length : 0;
+    private int    TombstoneCount => _table.Count(s => s.State == DhSlotState.Deleted);
+
+    private string LoadBarStyle
+    {
+        get
+        {
+            double pct = Math.Min(LoadFactor * 100.0, 100.0);
+            return $"width:{pct:F0}%";
+        }
+    }
+    private string LoadBarWarnCls => LoadFactor switch
+    {
+        > 0.85 => "lp-load-crit",
+        > 0.65 => "lp-load-warn",
+        _      => ""
+    };
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Dtr.InitAsync();
+        InitTable(11);
+        _wasmReady = true;
+        StateHasChanged();
+    }
+
+    private void InitTable(int capacity)
+    {
+        _table = new DhSlot[capacity];
+        for (int i = 0; i < capacity; i++)
+            _table[i] = new DhSlot();
+        _count = 0;
+    }
+
+    // ── Double Hashing Functions ───────────────────────────────────────────────
+    // h1: djb2-based
+    private static int DhH1(string key, int capacity)
+    {
+        uint hash = 5381;
+        foreach (char c in key)
+            hash = ((hash << 5) + hash) ^ (uint)c;
+        return (int)(hash % (uint)capacity);
+    }
+
+    // h2: sdbm-based — always odd, never 0, never equals capacity (for full cycle)
+    private static int DhH2(string key, int capacity)
+    {
+        uint hash = 0;
+        foreach (char c in key)
+            hash = (uint)c + (hash << 6) + (hash << 16) - hash;
+        int step = 1 + (int)(hash % (uint)(capacity - 1));
+        // Ensure step is odd for best coverage (capacity is prime already)
+        if (step % 2 == 0) step++;
+        if (step >= capacity) step = capacity - 2;
+        if (step < 1) step = 1;
+        return step;
+    }
+
+    private List<int> BuildProbeSequence(string key, int? targetSlot = null)
+    {
+        int cap  = _table.Length;
+        int h1   = DhH1(key, cap);
+        int h2   = DhH2(key, cap);
+        var path = new List<int>();
+
+        for (int i = 0; i < cap; i++)
+        {
+            int si = (h1 + i * h2) % cap;
+            path.Add(si);
+            var slot = _table[si];
+            if (slot.State == DhSlotState.Empty) break;
+            if (slot.State == DhSlotState.Occupied && slot.Key == key) break;
+            if (targetSlot.HasValue && si == targetSlot.Value) break;
+        }
+        return path;
+    }
+
+    // ── Resize ────────────────────────────────────────────────────────────────
+    private void MaybeResize()
+    {
+        if (LoadFactor < 0.65) return;
+        int newCap = NextPrime(_table.Length * 2 + 1);
+        var old    = _table;
+        InitTable(newCap);
+        foreach (var s in old.Where(s => s.State == DhSlotState.Occupied))
+            InternalAdd(s.Key, s.Value);
+        AddLog($"Rehash: ёмкость расширена до {newCap}", "log-op");
+    }
+
+    private bool InternalAdd(string key, string value)
+    {
+        int cap       = _table.Length;
+        int h1        = DhH1(key, cap);
+        int h2        = DhH2(key, cap);
+        int firstTomb = -1;
+
+        for (int i = 0; i < cap; i++)
+        {
+            int si   = (h1 + i * h2) % cap;
+            var slot = _table[si];
+            if (slot.State == DhSlotState.Empty)
+            {
+                int insertAt = firstTomb >= 0 ? firstTomb : si;
+                _table[insertAt] = new DhSlot { State = DhSlotState.Occupied, Key = key, Value = value, HomeSlot = h1 };
+                _count++;
+                return true;
+            }
+            if (slot.State == DhSlotState.Deleted && firstTomb < 0)
+                firstTomb = si;
+            if (slot.State == DhSlotState.Occupied && slot.Key == key)
+                return false; // duplicate
+        }
+        if (firstTomb >= 0)
+        {
+            _table[firstTomb] = new DhSlot { State = DhSlotState.Occupied, Key = key, Value = value, HomeSlot = h1 };
+            _count++;
+            return true;
+        }
+        return false;
+    }
+
+    // ── Operations ────────────────────────────────────────────────────────────
+
+    private async Task DoContains()
+    {
+        _busy = true; ClearAnim();
+        var key   = _keyInput.Trim();
+        SetHashInfo(key);
+        var path  = BuildProbeSequence(key);
+        bool found = path.Count > 0 && _table[path[^1]].State == DhSlotState.Occupied && _table[path[^1]].Key == key;
+
+        await AnimateProbe(path, found);
+
+        SetStatus($"ContainsKey({key}) → {found}", found ? "status-ok" : "status-err", found ? "✓" : "✗");
+        _result = found ? "true" : "false";
+        AddLog($"ContainsKey({key}) → {found} ({path.Count} probe, h₁={_lastH1}, h₂={_lastH2})", found ? "log-ok" : "log-miss");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoGet()
+    {
+        _busy = true; ClearAnim();
+        var key  = _keyInput.Trim();
+        SetHashInfo(key);
+        var path = BuildProbeSequence(key);
+        bool found = path.Count > 0 && _table[path[^1]].State == DhSlotState.Occupied && _table[path[^1]].Key == key;
+        string val = found ? _table[path[^1]].Value : string.Empty;
+
+        await AnimateProbe(path, found);
+
+        SetStatus(found ? $"TryGetValue({key}) → \"{val}\"" : $"TryGetValue({key}) → не найдено",
+                  found ? "status-ok" : "status-err", found ? "✓" : "✗");
+        _result = found ? $"\"{val}\"" : "не найдено";
+        AddLog($"Get({key}) → {(found ? val : "∅")} ({path.Count} probe)", found ? "log-ok" : "log-miss");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoAdd()
+    {
+        _busy = true; ClearAnim();
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+        SetHashInfo(key);
+
+        // Check if exists first
+        var checkPath = BuildProbeSequence(key);
+        bool exists = checkPath.Count > 0 && _table[checkPath[^1]].State == DhSlotState.Occupied && _table[checkPath[^1]].Key == key;
+
+        if (exists)
+        {
+            await AnimateProbe(checkPath, false);
+            SetStatus($"Add({key}) — ключ уже существует", "status-err", "✗");
+            _result = "уже есть";
+            AddLog($"Add({key}) → exists", "log-err");
+        }
+        else
+        {
+            bool ok = InternalAdd(key, val);
+            if (ok)
+            {
+                MaybeResize();
+                var insertPath = BuildProbeSequence(key);
+                SetHashInfo(key); // recalculate after potential resize
+                await AnimateProbe(insertPath, true);
+                int insertedAt = insertPath.Count > 0 ? insertPath[^1] : -1;
+                SetStatus($"Add({key}, {val}) — вставлено в слот [{insertedAt}]", "status-ok", "✓");
+                _result = "добавлено";
+                AddLog($"Add({key}) → ok, slot [{insertedAt}], h₁={_lastH1}, h₂={_lastH2}", "log-ok");
+            }
+            else
+            {
+                SetStatus($"Add({key}) — таблица полна", "status-err", "✗");
+                _result = "таблица полна";
+                AddLog($"Add({key}) → full", "log-err");
+            }
+        }
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoInsertOrAssign()
+    {
+        _busy = true; ClearAnim();
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+        SetHashInfo(key);
+
+        var checkPath = BuildProbeSequence(key);
+        bool exists   = checkPath.Count > 0 && _table[checkPath[^1]].State == DhSlotState.Occupied && _table[checkPath[^1]].Key == key;
+
+        if (exists)
+        {
+            _table[checkPath[^1]].Value = val;
+            await AnimateProbe(checkPath, true);
+            SetStatus($"InsertOrAssign({key}, {val}) — обновлено", "status-ok", "✓");
+            _result = "обновлено";
+            AddLog($"InsertOrAssign({key}) → updated, slot [{checkPath[^1]}]", "log-ok");
+        }
+        else
+        {
+            InternalAdd(key, val);
+            MaybeResize();
+            SetHashInfo(key);
+            var insertPath = BuildProbeSequence(key);
+            await AnimateProbe(insertPath, true);
+            int insertedAt = insertPath.Count > 0 ? insertPath[^1] : -1;
+            SetStatus($"InsertOrAssign({key}, {val}) — вставлено в [{insertedAt}]", "status-ok", "✓");
+            _result = "вставлено";
+            AddLog($"InsertOrAssign({key}) → inserted, slot [{insertedAt}]", "log-ok");
+        }
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoRemove()
+    {
+        _busy = true; ClearAnim();
+        var key  = _keyInput.Trim();
+        SetHashInfo(key);
+        var path = BuildProbeSequence(key);
+        bool found = path.Count > 0 && _table[path[^1]].State == DhSlotState.Occupied && _table[path[^1]].Key == key;
+
+        if (found)
+        {
+            int removeAt = path[^1];
+            await AnimateProbe(path, true);
+            _table[removeAt] = new DhSlot { State = DhSlotState.Deleted };
+            _count--;
+            SetStatus($"Remove({key}) — удалено (tombstone [{removeAt}])", "status-ok", "✓");
+            _result = "удалено";
+            AddLog($"Remove({key}) → ok, tombstone [{removeAt}] ({path.Count} probe)", "log-ok");
+        }
+        else
+        {
+            await AnimateProbe(path, false);
+            SetStatus($"Remove({key}) — ключ не найден", "status-err", "✗");
+            _result = "не найдено";
+            AddLog($"Remove({key}) → miss", "log-miss");
+        }
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoClear()
+    {
+        _busy = true; ClearAnim();
+        InitTable(_table.Length);
+        _lastProbePath.Clear();
+        _lastH1 = _lastH2 = -1;
+        SetStatus("Clear() — таблица очищена", "status-ok", "✓");
+        _result = "—";
+        AddLog("Clear()", "log-op");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task LoadSample()
+    {
+        _busy = true; ClearAnim();
+        InitTable(11);
+        string[] pairs = {
+            "apple",  "яблоко",  "banana", "банан",
+            "cherry", "вишня",   "date",   "финик",
+            "elderberry","бузина","fig",    "инжир",
+            "grape",  "виноград","hazel",  "лещина"
+        };
+        for (int i = 0; i < pairs.Length; i += 2)
+        {
+            if (LoadFactor >= 0.65) MaybeResize();
+            InternalAdd(pairs[i], pairs[i + 1]);
+        }
+        SetStatus($"Загружено {_count} пар", "status-ok", "✓");
+        AddLog($"Sample: загружено {_count} пар", "log-ok");
+        _busy = false; StateHasChanged();
+    }
+
+    private void ClearLog() => _log.Clear();
+
+    // ── Animation ─────────────────────────────────────────────────────────────
+
+    private async Task AnimateProbe(List<int> path, bool hit)
+    {
+        _lastProbePath = new List<int>(path);
+        _lastProbeHit  = hit;
+        _probeHome     = path.Count > 0 ? path[0] : -1;
+
+        for (int pi = 0; pi < path.Count; pi++)
+        {
+            _probeCursor = path[pi];
+            _slotAnimMap[path[pi]] = (pi == path.Count - 1 && hit) ? "lp-hit"
+                : (pi == 0) ? "lp-probe"
+                : "lp-collision";
+            StateHasChanged();
+            await Task.Delay(StepMs);
+        }
+        _probeCursor = -1;
+        StateHasChanged();
+        await Task.Delay(500);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private void SetHashInfo(string key)
+    {
+        _lastH1 = DhH1(key, _table.Length);
+        _lastH2 = DhH2(key, _table.Length);
+    }
+
+    private string GetSlotAnimCls(int idx)
+    {
+        if (_slotAnimMap.TryGetValue(idx, out var animCls))
+            return animCls;
+
+        return _table[idx].State switch
+        {
+            DhSlotState.Empty    => "lp-empty",
+            DhSlotState.Occupied => "lp-occ",
+            DhSlotState.Deleted  => "lp-del",
+            _                    => ""
+        };
+    }
+
+    private void ClearAnim()
+    {
+        _probeCursor = -1;
+        _probeHome   = -1;
+        _slotAnimMap.Clear();
+    }
+
+    private void SetStatus(string msg, string cls, string icon)
+    {
+        _status = msg; _statusCls = cls; _statusIcon = icon;
+    }
+
+    private void AddLog(string text, string cls)
+    {
+        _log.Add(new LogEntry { Text = text, Cls = cls });
+        if (_log.Count > 50) _log.RemoveAt(0);
+    }
+
+    private static string TruncStr(string s, int max) =>
+        s.Length <= max ? s : s[..max] + "…";
+
+    private static int NextPrime(int n)
+    {
+        if (n < 2) return 2;
+        if (n % 2 == 0) n++;
+        while (!IsPrime(n)) n += 2;
+        return n;
+    }
+
+    private static bool IsPrime(int n)
+    {
+        if (n < 2) return false;
+        if (n == 2) return true;
+        if (n % 2 == 0) return false;
+        for (int i = 3; i * i <= n; i += 2)
+            if (n % i == 0) return false;
+        return true;
+    }
+
+    private async Task BulkInsertAsync(List<(string Key, string Value)> pairs)
+    {
+        _busy = true; ClearAnim();
+        int added = 0;
+        foreach (var (k, v) in pairs)
+        {
+            if (LoadFactor >= 0.65) MaybeResize();
+            if (InternalAdd(k, v)) added++;
+        }
+        SetStatus($"Сгенерировано: добавлено {added} из {pairs.Count} элементов", "status-ok", "✓");
+        AddLog($"Генерация: +{added} элементов", "log-ok");
+        _busy = false;
+        StateHasChanged();
+    }
+}
