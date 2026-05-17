@@ -546,10 +546,65 @@ public class DictoriumJsService(IJSRuntime js)
 
     /// <summary>Public accessor used by SkipListDemo.</summary>
     public static List<DictItem> ParseSnapshotPublic(string json) => ParseSnapshot(json);
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  TreapDictionary  (JavaScript-layer treap, WASM module as runtime host)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    public async Task<int> TreapCreateAsync()
+        => await js.InvokeAsync<int>("DictoriumInterop.treapCreate");
+
+    public async Task TreapFreeAsync(int handle)
+        => await js.InvokeVoidAsync("DictoriumInterop.treapFree", handle);
+
+    public async Task<bool> TreapAddAsync(int handle, string key, string val)
+        => await js.InvokeAsync<bool>("DictoriumInterop.treapAdd", handle, key, val);
+
+    public async Task TreapInsertOrAssignAsync(int handle, string key, string val)
+        => await js.InvokeVoidAsync("DictoriumInterop.treapInsertOrAssign", handle, key, val);
+
+    public async Task<bool> TreapContainsAsync(int handle, string key)
+        => await js.InvokeAsync<bool>("DictoriumInterop.treapContains", handle, key);
+
+    public async Task<string> TreapGetAsync(int handle, string key)
+        => await js.InvokeAsync<string>("DictoriumInterop.treapGet", handle, key) ?? string.Empty;
+
+    public async Task<bool> TreapRemoveAsync(int handle, string key)
+        => await js.InvokeAsync<bool>("DictoriumInterop.treapRemove", handle, key);
+
+    public async Task TreapClearAsync(int handle)
+        => await js.InvokeVoidAsync("DictoriumInterop.treapClear", handle);
+
+    public async Task<int> TreapCountAsync(int handle)
+        => await js.InvokeAsync<int>("DictoriumInterop.treapCount", handle);
+
+    public async Task<int> TreapHeightAsync(int handle)
+        => await js.InvokeAsync<int>("DictoriumInterop.treapHeight", handle);
+
+    public async Task<TreapNodeDto?> TreapSnapshotAsync(int handle)
+    {
+        var json = await js.InvokeAsync<string>("DictoriumInterop.treapSnapshot", handle);
+        if (string.IsNullOrEmpty(json) || json == "null") return null;
+        try { return JsonSerializer.Deserialize<TreapNodeDto>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }); }
+        catch { return null; }
+    }
 }
 
 /// <summary>A key-value pair returned from the Dictorium WASM snapshot.</summary>
 public record DictItem(string Key, string Value);
+
+/// <summary>
+/// Recursive tree node returned by treapSnapshot().
+/// Mirrors the JS object: { key, value, priority, left, right }.
+/// </summary>
+public class TreapNodeDto
+{
+    public string       Key      { get; set; } = "";
+    public string       Value    { get; set; } = "";
+    public long         Priority { get; set; }
+    public TreapNodeDto? Left    { get; set; }
+    public TreapNodeDto? Right   { get; set; }
+}
 
 /// <summary>One bucket in the ChainingDictionary hash table.</summary>
 public class ChainBucket

@@ -1,0 +1,783 @@
+@page "/demo/treap"
+@inject DictoriumJsService Dtr
+@inject NavigationManager Nav
+
+<PageTitle>TreapDictionary — Демо — Dictorium</PageTitle>
+
+<div class="page-wrap">
+
+    <div class="breadcrumb">
+        <a href="">Обзор</a>
+        <span class="bc-sep">›</span>
+        <span class="bc-now">TreapDictionary [LIVE]</span>
+    </div>
+
+    <div class="struct-head-bar">
+        <div class="struct-issue-num" style="color:var(--acc-g)">
+            dtr::TreapDictionary&lt;string, string&gt; — реализация через WASM + JS-слой
+        </div>
+        <h1 class="struct-h1">Декартово дерево (Treap)</h1>
+        <div class="struct-en">TreapDictionary · O(log n) в среднем · BST по ключу + max-куча по приоритету</div>
+        <p class="struct-description">
+            <strong>Treap</strong> (Tree + Heap, Арагон и Сейдел, 1989) — рандомизированное двоичное дерево поиска.
+            Каждый узел хранит <em>ключ</em> (BST-свойство: левые ключи &lt; узел &lt; правые) и случайный
+            <em>приоритет</em> (heap-свойство: приоритет узла ≥ приоритета детей).
+            При вставке новый узел получает случайный приоритет и поднимается к корню поворотами до
+            восстановления кучи. Так дерево остаётся сбалансированным случайно — без сложной балансировки AVL/RB.
+            Модуль <code>dictorium.wasm</code> используется как runtime-хост; логика Treap реализована
+            в JS-интерфейсном слое.
+        </p>
+        <div class="struct-tags">
+            <span class="s-tag">Contains O(log n)</span>
+            <span class="s-tag">Add O(log n)</span>
+            <span class="s-tag">Remove O(log n)</span>
+            <span class="s-tag">Рандомизированный баланс</span>
+            @if (_wasmReady)
+            {
+                <span class="s-tag" style="color:var(--acc-g);border-color:var(--acc-g)">● WASM готов</span>
+            }
+            else
+            {
+                <span class="s-tag" style="color:var(--acc-r)">○ Загрузка WASM...</span>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="demo-status @_statusCls">
+            <strong>@_statusIcon</strong>&nbsp; @_status
+        </div>
+    }
+
+    @if (!_wasmReady)
+    {
+        <div class="comp-hint">Загрузка WebAssembly модуля Dictorium...</div>
+    }
+    else
+    {
+        <div class="demo-layout">
+
+            <!-- ── Controls ────────────────────────────────────────────────── -->
+            <div class="demo-controls">
+                <div class="ctrl-section">
+                    <div class="ctrl-section-title">Ключ (Key)</div>
+                    <input class="search-input" style="width:100%;"
+                           @bind="_keyInput" @bind:event="oninput"
+                           placeholder="apple"
+                           disabled="@_busy" />
+                    <div class="ctrl-section-title" style="margin-top:6px;">Значение (Value)</div>
+                    <input class="search-input" style="width:100%;margin-bottom:0;"
+                           @bind="_valInput" @bind:event="oninput"
+                           placeholder="яблоко"
+                           disabled="@_busy" />
+                </div>
+
+                <div class="ctrl-ops">
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-search" @onclick="DoContains"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                            ▶ Contains(key)
+                        </button>
+                        <span class="op-hint-icon @("contains"==_activeDemoTip?"active":"")" @onclick='()=>ToggleDemoTip("contains")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-search" @onclick="DoGet"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                            ▶ Get(key)
+                        </button>
+                        <span class="op-hint-icon @("get"==_activeDemoTip?"active":"")" @onclick='()=>ToggleDemoTip("get")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-add" @onclick="DoAdd"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                            + Add(key, value)
+                        </button>
+                        <span class="op-hint-icon @("add"==_activeDemoTip?"active":"")" @onclick='()=>ToggleDemoTip("add")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-add" @onclick="DoInsertOrAssign"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                            ± InsertOrAssign(key, value)
+                        </button>
+                        <span class="op-hint-icon @("ioa"==_activeDemoTip?"active":"")" @onclick='()=>ToggleDemoTip("ioa")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-remove" @onclick="DoRemove"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                            − Remove(key)
+                        </button>
+                        <span class="op-hint-icon @("remove"==_activeDemoTip?"active":"")" @onclick='()=>ToggleDemoTip("remove")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-clear" @onclick="DoClear" disabled="@_busy">
+                            ⊘ Clear()
+                        </button>
+                    </div>
+                    <button class="btn-op btn-build" @onclick="DoLoadSample" disabled="@_busy">
+                        Загрузить пример
+                    </button>
+                </div>
+
+                <DemoOpHints ActiveTip="@_activeDemoTip" OnToggle="@((id) => { _activeDemoTip = id; StateHasChanged(); })" />
+
+                <BulkGeneratePanel Disabled="@_busy" OnInsert="BulkInsertAsync" />
+
+                <div class="ctrl-info">
+                    <div class="ctrl-info-row">
+                        <span>Count()</span>
+                        <span class="ctrl-info-val">@_count</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Height()</span>
+                        <span class="ctrl-info-val">@_height</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Шагов поиска</span>
+                        <span class="ctrl-info-val">@(_searchSteps > 0 ? _searchSteps.ToString() : "—")</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Результат</span>
+                        <span class="ctrl-info-val">@(_result ?? "—")</span>
+                    </div>
+                </div>
+
+                <div class="ctrl-legend">
+                    <div class="legend-title">Легенда узла</div>
+                    <div style="font-size:10px;color:#444;margin-bottom:6px;">
+                        Каждый узел показывает три строки:
+                    </div>
+                    <div class="treap-node-legend">
+                        <div class="treap-legend-key">key</div>
+                        <div class="treap-legend-val">value</div>
+                        <div class="treap-legend-prio">● prio = @_exPrio</div>
+                    </div>
+
+                    <div class="legend-title" style="margin-top:10px;">Состояния</div>
+                    @foreach (var (swatch, label) in new[]{
+                        ("treap-sw-normal",   "Узел (норма)"),
+                        ("treap-sw-scanning", "Путь поиска"),
+                        ("treap-sw-hit",      "Найден"),
+                        ("treap-sw-miss",     "Не найден"),
+                    })
+                    {
+                        <div class="legend-row">
+                            <span class="avl-legend-swatch @swatch"></span>
+                            <span>@label</span>
+                        </div>
+                    }
+
+                    <div class="legend-title" style="margin-top:10px;">Инварианты</div>
+                    <div style="font-size:10px;color:#333;line-height:1.5;">
+                        <div>🔵 <strong>BST:</strong> left.key &lt; node.key &lt; right.key</div>
+                        <div>🟠 <strong>Heap:</strong> node.prio ≥ child.prio</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Visualization ───────────────────────────────────────────── -->
+            <div class="demo-main">
+                <div class="avl-tree-wrap">
+
+                @if (_treeRoot == null)
+                {
+                    <div class="avl-empty-state">
+                        <div>Дерево пустое.</div>
+                        <div style="font-size:11px;margin-top:4px;">Добавьте элементы или нажмите <strong>Загрузить пример</strong>.</div>
+                    </div>
+                }
+                else
+                {
+                    <!-- Heap property check banner -->
+                    @if (!_heapOk)
+                    {
+                        <div class="demo-status status-err" style="margin-bottom:8px;">
+                            ⚠ Нарушение heap-свойства обнаружено (ошибка отладки)
+                        </div>
+                    }
+
+                    <div style="overflow-x:auto;overflow-y:hidden;">
+                        <svg viewBox="0 0 @_svgW @_svgH"
+                             width="@_svgW" height="@_svgH"
+                             xmlns="http://www.w3.org/2000/svg"
+                             style="display:block;">
+
+                            <!-- Edges — normal -->
+                            @foreach (var e in _edges)
+                            {
+                                if (!_animPathEdges.Contains((e.FromKey, e.ToKey)))
+                                {
+                                    <line x1="@Fmt(e.X1)" y1="@Fmt(e.Y1)"
+                                          x2="@Fmt(e.X2)" y2="@Fmt(e.Y2)"
+                                          stroke="#9aafcc" stroke-width="1.5"/>
+                                }
+                            }
+                            <!-- Edges — animated path (amber, dashed) -->
+                            @foreach (var e in _edges)
+                            {
+                                if (_animPathEdges.Contains((e.FromKey, e.ToKey)))
+                                {
+                                    <line x1="@Fmt(e.X1)" y1="@Fmt(e.Y1)"
+                                          x2="@Fmt(e.X2)" y2="@Fmt(e.Y2)"
+                                          stroke="#cc8800" stroke-width="3"
+                                          stroke-dasharray="6,3"/>
+                                }
+                            }
+
+                            <!-- Nodes -->
+                            @foreach (var node in _allNodes)
+                            {
+                                var rx     = Fmt(node.X - NW / 2);
+                                var ry     = Fmt(node.Y - NH / 2);
+                                var cx     = Fmt(node.X);
+                                var ty1    = Fmt(node.Y - NH / 2 + 13);   // key line
+                                var div1Y  = Fmt(node.Y - NH / 2 + 17);   // separator 1
+                                var ty2    = Fmt(node.Y - NH / 2 + 29);   // value line
+                                var div2Y  = Fmt(node.Y - NH / 2 + 34);   // separator 2
+                                var ty3    = Fmt(node.Y - NH / 2 + 46);   // priority line
+                                var lx1    = Fmt(node.X - NW / 2 + 4);
+                                var lx2    = Fmt(node.X + NW / 2 - 4);
+                                var st     = GetNodeState(node.Key);
+
+                                // Check heap property (for highlight)
+                                bool heapViolation = false;
+                                if (node.Left  != null && node.Left.Priority  > node.Priority) heapViolation = true;
+                                if (node.Right != null && node.Right.Priority > node.Priority) heapViolation = true;
+
+                                string fill, stroke, sw, textFill, prioColor;
+                                switch (st)
+                                {
+                                    case NodeState.Scanning:
+                                        fill="#fffacc"; stroke="#cc8800"; sw="2.5"; textFill="#554400"; prioColor="#996600";
+                                        break;
+                                    case NodeState.Hit:
+                                        fill="#ddf4dd"; stroke="#008800"; sw="2"; textFill="#111111"; prioColor="#008800";
+                                        break;
+                                    case NodeState.Miss:
+                                        fill="#f4dddd"; stroke="#880000"; sw="2"; textFill="#111111"; prioColor="#880000";
+                                        break;
+                                    default:
+                                        fill="#f5f5ef"; stroke=heapViolation?"#cc4400":"#8899aa";
+                                        sw=heapViolation?"2":"1"; textFill="#111111"; prioColor="#c87020";
+                                        break;
+                                }
+
+                                bool isRoot = node.Depth == 0;
+                                var crownVis = isRoot ? "visible" : "hidden";
+
+                                <g>
+                                    <rect x="@rx" y="@ry" width="@NW" height="@NH"
+                                          rx="4" ry="4"
+                                          fill="@fill" stroke="@stroke" stroke-width="@sw"/>
+
+                                    <!-- Root crown indicator (hidden for non-root nodes) -->
+                                    <text x="@Fmt(node.X + NW/2 - 6)" y="@Fmt(node.Y - NH/2 - 2)"
+                                          text-anchor="middle" font-size="9" fill="#c87020"
+                                          visibility="@crownVis">★</text>
+
+                                    <!-- Key -->
+                                    <text x="@cx" y="@ty1" text-anchor="middle"
+                                          font-family="'Courier New',Courier,monospace"
+                                          font-size="11" font-weight="bold" fill="@textFill">
+                                        @Trunc(node.Key, 13)
+                                    </text>
+
+                                    <!-- Separator 1 -->
+                                    <line x1="@lx1" y1="@div1Y" x2="@lx2" y2="@div1Y"
+                                          stroke="#cccccc" stroke-width="0.5"/>
+
+                                    <!-- Value -->
+                                    <text x="@cx" y="@ty2" text-anchor="middle"
+                                          font-family="'Courier New',Courier,monospace"
+                                          font-size="10" fill="#0044aa">
+                                        @Trunc(node.Value, 13)
+                                    </text>
+
+                                    <!-- Separator 2 -->
+                                    <line x1="@lx1" y1="@div2Y" x2="@lx2" y2="@div2Y"
+                                          stroke="#e0d0b8" stroke-width="0.5"/>
+
+                                    <!-- Priority -->
+                                    <text x="@cx" y="@ty3" text-anchor="middle"
+                                          font-family="'Courier New',Courier,monospace"
+                                          font-size="9" fill="@prioColor">
+                                        ●&nbsp;@FmtPrio(node.Priority)
+                                    </text>
+                                </g>
+                            }
+                        </svg>
+                    </div>
+
+                    <div class="avl-tree-note">
+                        <span>Высота: <strong>@_height</strong></span>
+                        <span class="avl-note-sep">·</span>
+                        <span>Узлов: <strong>@_count</strong></span>
+                        @if (_count > 1)
+                        {
+                            <span class="avl-note-sep">·</span>
+                            <span>Идеальный log₂: <strong>@(Math.Ceiling(Math.Log2(_count + 1)).ToString("F0"))</strong></span>
+                            <span class="avl-note-sep">·</span>
+                            <span>Коэф. баланса: <strong>@((_height / Math.Log2(_count + 1)).ToString("F2", System.Globalization.CultureInfo.InvariantCulture))×</strong></span>
+                        }
+                        <span class="avl-note-sep">·</span>
+                        <span>Heap: <strong style="color:@(_heapOk?"#008800":"#cc0000")">@(_heapOk ? "✓ OK" : "✗ НАРУШЕН")</strong></span>
+                    </div>
+                }
+
+                </div><!-- /avl-tree-wrap -->
+
+                <!-- Operation log -->
+                @if (_log.Count > 0)
+                {
+                    <div class="demo-log">
+                        @foreach (var line in _log)
+                        {
+                            <div class="log-line @line.Cls">@line.Text</div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+    }
+</div>
+
+<style>
+    /* ── Treap-specific node legend ──────────────────────────────────── */
+    .treap-node-legend {
+        border: 1.5px solid #8899aa;
+        border-radius: 4px;
+        width: 120px;
+        background: #f5f5ef;
+        margin: 4px 0;
+        font-family: 'Courier New', Courier, monospace;
+        overflow: hidden;
+    }
+    .treap-legend-key  { font-size:11px; font-weight:bold; color:#111; padding:3px 8px; border-bottom:1px solid #ddd; }
+    .treap-legend-val  { font-size:10px; color:#0044aa;              padding:2px 8px; border-bottom:1px solid #e0d0b8; }
+    .treap-legend-prio { font-size:9px;  color:#c87020;              padding:2px 8px; }
+
+    /* ── Swatch colours ──────────────────────────────────────────────── */
+    .treap-sw-normal   { background:#f5f5ef; border-color:#8899aa !important; }
+    .treap-sw-scanning { background:#fffacc; border-color:#cc8800 !important; }
+    .treap-sw-hit      { background:#ddf4dd; border-color:#008800 !important; }
+    .treap-sw-miss     { background:#f4dddd; border-color:#880000 !important; }
+</style>
+
+@code {
+    // ── State ─────────────────────────────────────────────────────────────
+    private int     _handle;
+    private bool    _wasmReady;
+    private bool    _busy;
+    private string  _keyInput = "";
+    private string  _valInput = "";
+    private string? _status;
+    private string  _statusCls  = "";
+    private string  _statusIcon = "";
+    private string? _result;
+    private int     _searchSteps;
+    private int     _count;
+    private int     _height;
+    private bool    _heapOk = true;
+
+    // Legend example priority
+    private string _exPrio = "3 141 592 653";
+
+    private const int MaxLog = 30;
+    private record LogLine(string Text, string Cls);
+    private readonly List<LogLine> _log = new();
+    private string? _activeDemoTip;
+    private void ToggleDemoTip(string id) => _activeDemoTip = _activeDemoTip == id ? null : id;
+
+    // ── Animation ────────────────────────────────────────────────────────
+    private const int StepMs = 380;
+
+    private readonly HashSet<string>             _animPathKeys  = new();
+    private readonly HashSet<(string, string)>   _animPathEdges = new();
+    private string? _animHit;
+    private string? _animMiss;
+
+    // ── Tree model ───────────────────────────────────────────────────────
+    private enum NodeState { Normal, Scanning, Hit, Miss }
+
+    private class VisNode
+    {
+        public string    Key      = "";
+        public string    Value    = "";
+        public long      Priority;
+        public int       Depth;
+        public double    X, Y;
+        public VisNode?  Left, Right;
+    }
+
+    private record EdgeInfo(double X1, double Y1, double X2, double Y2, string FromKey, string ToKey);
+
+    private VisNode?       _treeRoot;
+    private List<VisNode>  _allNodes = new();
+    private List<EdgeInfo> _edges    = new();
+    private double _svgW, _svgH;
+
+    // Layout constants — node is taller than AVL (3 content rows)
+    private const double XSpacing = 134;
+    private const double YSpacing = 90;
+    private const double XPad     = 67;
+    private const double YPad     = 50;
+    private const double NW       = 124;
+    private const double NH       = 56;
+
+    // ── Lifecycle ────────────────────────────────────────────────────────
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Dtr.InitAsync();
+        _handle    = await Dtr.TreapCreateAsync();
+        _wasmReady = true;
+        StateHasChanged();
+    }
+
+    // ── Operations ───────────────────────────────────────────────────────
+
+    private async Task DoContains()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput)) return;
+        _busy = true;
+        var key   = _keyInput.Trim();
+        var found = await Dtr.TreapContainsAsync(_handle, key);
+        Log($"▶ Contains(\"{key}\") → {(found ? "true" : "false")}", found ? "log-ok" : "log-miss");
+
+        await BuildSnapshot();
+        await AnimateSearch(key, found ? NodeState.Hit : NodeState.Miss);
+        await Task.Delay(700);
+
+        _result      = found ? "true" : "false";
+        _searchSteps = _animPathKeys.Count;
+        SetStatus(found ? $"Contains(\"{key}\") → true" : $"Contains(\"{key}\") → false",
+                  found ? "status-ok" : "status-err", found ? "✓" : "✗");
+        ClearAnim();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoGet()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+        var val = await Dtr.TreapGetAsync(_handle, key);
+        var found = !string.IsNullOrEmpty(val);
+        Log(found ? $"▶ Get(\"{key}\") → \"{val}\"" : $"▶ Get(\"{key}\") → null",
+            found ? "log-ok" : "log-miss");
+
+        await BuildSnapshot();
+        await AnimateSearch(key, found ? NodeState.Hit : NodeState.Miss);
+        await Task.Delay(700);
+
+        _result      = found ? val : "null";
+        _searchSteps = _animPathKeys.Count;
+        SetStatus(found ? $"Get(\"{key}\") → \"{val}\"" : $"Get(\"{key}\") → null",
+                  found ? "status-ok" : "status-err", found ? "✓" : "✗");
+        ClearAnim();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoAdd()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+
+        // Show search path before insert
+        await BuildSnapshot();
+        await AnimateSearch(key, NodeState.Normal);
+        await Task.Delay(200);
+
+        var ok = await Dtr.TreapAddAsync(_handle, key, val);
+        Log(ok ? $"+ Add(\"{key}\", \"{val}\")" : $"✗ Add(\"{key}\") — дубликат",
+            ok ? "log-ok" : "log-err");
+
+        _result      = ok ? "ok" : "dup";
+        _searchSteps = _animPathKeys.Count;
+
+        ClearAnim();
+        _animHit = ok ? key : null;
+        _animMiss = ok ? null : key;
+        await BuildSnapshot();
+        SetStatus(ok ? $"Add(\"{key}\", \"{val}\") → ok" : $"Add(\"{key}\") → дубликат",
+                  ok ? "status-ok" : "status-err", ok ? "✓" : "✗");
+        StateHasChanged();
+        await Task.Delay(700);
+
+        ClearAnim();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoInsertOrAssign()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+
+        await BuildSnapshot();
+        await AnimateSearch(key, NodeState.Normal);
+        await Task.Delay(200);
+
+        await Dtr.TreapInsertOrAssignAsync(_handle, key, val);
+        Log($"± InsertOrAssign(\"{key}\", \"{val}\")", "log-ok");
+        _result      = "ok";
+        _searchSteps = _animPathKeys.Count;
+
+        ClearAnim();
+        _animHit = key;
+        await BuildSnapshot();
+        SetStatus($"InsertOrAssign(\"{key}\", \"{val}\")", "status-ok", "✓");
+        StateHasChanged();
+        await Task.Delay(700);
+
+        ClearAnim();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoRemove()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+
+        await BuildSnapshot();
+        await AnimateSearch(key, NodeState.Miss);
+        await Task.Delay(400);
+
+        var ok = await Dtr.TreapRemoveAsync(_handle, key);
+        Log(ok ? $"− Remove(\"{key}\")" : $"✗ Remove(\"{key}\") — не найден",
+            ok ? "log-ok" : "log-miss");
+        _result      = ok ? "ok" : "miss";
+        _searchSteps = _animPathKeys.Count;
+        SetStatus(ok ? $"Remove(\"{key}\") → ok" : $"Remove(\"{key}\") → не найден",
+                  ok ? "status-ok" : "status-err", ok ? "✓" : "✗");
+
+        ClearAnim();
+        await BuildSnapshot();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoClear()
+    {
+        if (_busy) return;
+        _busy = true;
+        await Dtr.TreapClearAsync(_handle);
+        _result = null; _searchSteps = 0;
+        SetStatus("Clear() — дерево очищено", "status-ok", "✓");
+        Log("⊘ Clear()", "log-op");
+        ClearAnim();
+        await BuildSnapshot();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DoLoadSample()
+    {
+        if (_busy) return;
+        _busy = true;
+        await Dtr.TreapClearAsync(_handle);
+        var sample = new[]
+        {
+            ("banana",     "банан"),
+            ("apple",      "яблоко"),
+            ("cherry",     "вишня"),
+            ("dog",        "собака"),
+            ("cat",        "кошка"),
+            ("elderberry", "бузина"),
+            ("fig",        "инжир"),
+            ("grape",      "виноград"),
+            ("hawk",       "ястреб"),
+            ("iris",       "ирис"),
+            ("jasmine",    "жасмин"),
+            ("kiwi",       "киви"),
+        };
+        foreach (var (k, v) in sample)
+            await Dtr.TreapAddAsync(_handle, k, v);
+        SetStatus("Загружен пример — 12 элементов", "status-ok", "✓");
+        Log("Загружен пример (12 элементов)", "log-ok");
+        ClearAnim();
+        await BuildSnapshot();
+        _busy = false;
+        StateHasChanged();
+    }
+
+    // ── Animation ─────────────────────────────────────────────────────────
+
+    private async Task AnimateSearch(string key, NodeState finalState)
+    {
+        var path = FindSearchPath(_treeRoot, key);
+
+        _animPathKeys.Clear();
+        _animPathEdges.Clear();
+        _animHit  = null;
+        _animMiss = null;
+
+        for (int i = 0; i < path.Count; i++)
+        {
+            if (i > 0) _animPathEdges.Add((path[i - 1].Key, path[i].Key));
+            _animPathKeys.Add(path[i].Key);
+
+            bool isLast = i == path.Count - 1;
+            if (isLast)
+            {
+                if      (finalState == NodeState.Hit)  _animHit  = path[i].Key;
+                else if (finalState == NodeState.Miss) _animMiss = path[i].Key;
+            }
+
+            StateHasChanged();
+            await Task.Delay(StepMs);
+        }
+    }
+
+    // ── Snapshot & tree layout ────────────────────────────────────────────
+
+    private async Task BuildSnapshot()
+    {
+        var dto = await Dtr.TreapSnapshotAsync(_handle);
+        _count  = await Dtr.TreapCountAsync(_handle);
+        _height = await Dtr.TreapHeightAsync(_handle);
+
+        _treeRoot = dto == null ? null : BuildVisTree(dto, 0);
+        _allNodes = new();
+        _edges    = new();
+
+        if (_treeRoot != null)
+        {
+            int rank = 0;
+            AssignPositions(_treeRoot, ref rank);
+            CollectNodesAndEdges(_treeRoot);
+        }
+
+        int n = _count;
+        _svgW = n > 0 ? n * XSpacing : 200;
+        _svgH = n > 0 ? YPad * 2 + _height * YSpacing + NH : 120;
+
+        _heapOk = CheckHeap(_treeRoot);
+
+        // Update legend example priority
+        if (_treeRoot != null)
+            _exPrio = FmtPrio(_treeRoot.Priority);
+    }
+
+    private static VisNode? BuildVisTree(TreapNodeDto? dto, int depth)
+    {
+        if (dto == null) return null;
+        return new VisNode
+        {
+            Key      = dto.Key,
+            Value    = dto.Value,
+            Priority = dto.Priority,
+            Depth    = depth,
+            Left     = BuildVisTree(dto.Left,  depth + 1),
+            Right    = BuildVisTree(dto.Right, depth + 1),
+        };
+    }
+
+    private static void AssignPositions(VisNode? node, ref int rank)
+    {
+        if (node == null) return;
+        AssignPositions(node.Left, ref rank);
+        node.X = XPad + rank * XSpacing;
+        node.Y = YPad + node.Depth * YSpacing;
+        rank++;
+        AssignPositions(node.Right, ref rank);
+    }
+
+    private void CollectNodesAndEdges(VisNode? node)
+    {
+        if (node == null) return;
+        _allNodes.Add(node);
+        if (node.Left  != null) { _edges.Add(new(node.X, node.Y, node.Left.X,  node.Left.Y,  node.Key, node.Left.Key));  CollectNodesAndEdges(node.Left);  }
+        if (node.Right != null) { _edges.Add(new(node.X, node.Y, node.Right.X, node.Right.Y, node.Key, node.Right.Key)); CollectNodesAndEdges(node.Right); }
+    }
+
+    private static List<VisNode> FindSearchPath(VisNode? root, string key)
+    {
+        var path = new List<VisNode>();
+        var node = root;
+        while (node != null)
+        {
+            path.Add(node);
+            int cmp = string.Compare(key, node.Key, StringComparison.Ordinal);
+            if (cmp == 0) break;
+            node = cmp < 0 ? node.Left : node.Right;
+        }
+        return path;
+    }
+
+    private static bool CheckHeap(VisNode? node)
+    {
+        if (node == null) return true;
+        if (node.Left  != null && node.Left.Priority  > node.Priority) return false;
+        if (node.Right != null && node.Right.Priority > node.Priority) return false;
+        return CheckHeap(node.Left) && CheckHeap(node.Right);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+
+    private NodeState GetNodeState(string key)
+    {
+        if (key == _animHit)              return NodeState.Hit;
+        if (key == _animMiss)             return NodeState.Miss;
+        if (_animPathKeys.Contains(key))  return NodeState.Scanning;
+        return NodeState.Normal;
+    }
+
+    private void ClearAnim()
+    {
+        _animPathKeys.Clear();
+        _animPathEdges.Clear();
+        _animHit  = null;
+        _animMiss = null;
+    }
+
+    private void SetStatus(string msg, string cls, string icon)
+    { _status = msg; _statusCls = cls; _statusIcon = icon; }
+
+    private void Log(string text, string cls)
+    {
+        _log.Insert(0, new LogLine(text, cls));
+        if (_log.Count > MaxLog) _log.RemoveAt(_log.Count - 1);
+    }
+
+    private static string Fmt(double d)         => d.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+    private static string Trunc(string s, int m) => s.Length <= m ? s : s[..m] + "…";
+
+    /// Format priority as compact thousands-separated string (e.g. 3 141 592 653)
+    private static string FmtPrio(long p)
+    {
+        var s = p.ToString();
+        var sb = new System.Text.StringBuilder();
+        int rem = s.Length % 3;
+        for (int i = 0; i < s.Length; i++)
+        {
+            if (i > 0 && (i - rem) % 3 == 0) sb.Append('\u202F'); // narrow no-break space
+            sb.Append(s[i]);
+        }
+        return sb.ToString();
+    }
+
+    private async Task BulkInsertAsync(List<(string Key, string Value)> pairs)
+    {
+        _busy = true;
+        int added = 0;
+        foreach (var (k, v) in pairs)
+            if (await Dtr.TreapAddAsync(_handle, k, v)) added++;
+        SetStatus($"Сгенерировано: добавлено {added} из {pairs.Count} элементов", "status-ok", "✓");
+        Log($"Генерация: +{added} элементов", "log-ok");
+        ClearAnim();
+        await BuildSnapshot();
+        _busy = false;
+        StateHasChanged();
+    }
+}

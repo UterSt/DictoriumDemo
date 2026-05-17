@@ -332,6 +332,95 @@ window.DictoriumInterop = (() => {
         return readAndFree(mod._sl_snapshot(h));
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    //  TreapDictionary  (JavaScript layer, WASM module must be initialised)
+    //  Cartesian tree: BST by key, max-heap by random priority.
+    //  String data lives in plain JS objects; WASM module is still the
+    //  runtime host (init / isReady / lastError delegate to it).
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── Internal helpers ──────────────────────────────────────────────
+    function _tNewNode(key, val) {
+        return { key, value: val, priority: (Math.random() * 0xFFFFFFFF) >>> 0, left: null, right: null };
+    }
+    function _tRotR(y) { const x = y.left; y.left = x.right; x.right = y; return x; }
+    function _tRotL(x) { const y = x.right; x.right = y.left; y.left = x; return y; }
+
+    // Returns [newRoot, inserted:bool]
+    function _tInsert(n, key, val) {
+        if (!n) return [_tNewNode(key, val), true];
+        if (key === n.key) return [n, false];
+        if (key < n.key) {
+            const [nl, ok] = _tInsert(n.left, key, val);
+            n.left = nl;
+            if (n.left && n.left.priority > n.priority) n = _tRotR(n);
+            return [n, ok];
+        } else {
+            const [nr, ok] = _tInsert(n.right, key, val);
+            n.right = nr;
+            if (n.right && n.right.priority > n.priority) n = _tRotL(n);
+            return [n, ok];
+        }
+    }
+
+    function _tInsertOrAssign(n, key, val) {
+        if (!n) return _tNewNode(key, val);
+        if (key === n.key) { n.value = val; return n; }
+        if (key < n.key) {
+            n.left = _tInsertOrAssign(n.left, key, val);
+            if (n.left && n.left.priority > n.priority) n = _tRotR(n);
+        } else {
+            n.right = _tInsertOrAssign(n.right, key, val);
+            if (n.right && n.right.priority > n.priority) n = _tRotL(n);
+        }
+        return n;
+    }
+
+    // Returns [newRoot, removed:bool]
+    function _tRemove(n, key) {
+        if (!n) return [null, false];
+        if (key < n.key) { const [nl, ok] = _tRemove(n.left, key);  n.left  = nl; return [n, ok]; }
+        if (key > n.key) { const [nr, ok] = _tRemove(n.right, key); n.right = nr; return [n, ok]; }
+        // Found
+        if (!n.left && !n.right) return [null, true];
+        if (!n.left)  { n = _tRotL(n); const [nl] = _tRemove(n.left,  key); n.left  = nl; return [n, true]; }
+        if (!n.right) { n = _tRotR(n); const [nr] = _tRemove(n.right, key); n.right = nr; return [n, true]; }
+        if (n.left.priority > n.right.priority) {
+            n = _tRotR(n); const [nr] = _tRemove(n.right, key); n.right = nr;
+        } else {
+            n = _tRotL(n); const [nl] = _tRemove(n.left,  key); n.left  = nl;
+        }
+        return [n, true];
+    }
+
+    function _tContains(n, key) {
+        while (n) { if (key === n.key) return true; n = key < n.key ? n.left : n.right; }
+        return false;
+    }
+    function _tGet(n, key) {
+        while (n) { if (key === n.key) return n.value; n = key < n.key ? n.left : n.right; }
+        return null;
+    }
+    function _tCount(n)  { return n ? 1 + _tCount(n.left)  + _tCount(n.right)  : 0; }
+    function _tHeight(n) { return n ? 1 + Math.max(_tHeight(n.left), _tHeight(n.right)) : 0; }
+    function _tSnap(n)   { return n ? { key: n.key, value: n.value, priority: n.priority, left: _tSnap(n.left), right: _tSnap(n.right) } : null; }
+
+    // ── Handle store ──────────────────────────────────────────────────
+    const _treapStore = {};
+    let   _treapSeq   = 1;
+
+    function treapCreate()           { const id = _treapSeq++; _treapStore[id] = null; return id; }
+    function treapFree(h)            { delete _treapStore[h]; }
+    function treapClear(h)           { _treapStore[h] = null; }
+    function treapCount(h)           { return _tCount(_treapStore[h]); }
+    function treapHeight(h)          { return _tHeight(_treapStore[h]); }
+    function treapContains(h, key)   { return _tContains(_treapStore[h], key); }
+    function treapGet(h, key)        { return _tGet(_treapStore[h], key) ?? ''; }
+    function treapAdd(h, key, val)   { const [r, ok] = _tInsert(_treapStore[h], key, val); _treapStore[h] = r; return ok; }
+    function treapInsertOrAssign(h, key, val) { _treapStore[h] = _tInsertOrAssign(_treapStore[h], key, val); }
+    function treapRemove(h, key)     { const [r, ok] = _tRemove(_treapStore[h], key); _treapStore[h] = r; return ok; }
+    function treapSnapshot(h)        { return JSON.stringify(_tSnap(_treapStore[h])); }
+
     // ── Public API ──────────────────────────────────────────────────────────
     return {
         init, isReady, lastError,
@@ -365,5 +454,9 @@ window.DictoriumInterop = (() => {
         slCreate, slFree, slAdd, slInsertOrAssign,
         slContains, slGet, slRemove, slClear,
         slCount, slMaxLevel, slSnapshot,
+
+        treapCreate, treapFree, treapAdd, treapInsertOrAssign,
+        treapContains, treapGet, treapRemove, treapClear,
+        treapCount, treapHeight, treapSnapshot,
     };
 })();

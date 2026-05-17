@@ -1162,3 +1162,13 @@
     color: var(--text-2);
 }
 .rh-stat-chip span { font-weight: 700; color: var(--text); }
+
+/* ════════════════════════════════════════════════════════════════════════
+   TreapDemo — Декартово дерево
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Treap uses the shared .avl-legend-swatch base; only colour overrides needed */
+.treap-sw-normal   { background: #f5f5ef; border-color: #8899aa; }
+.treap-sw-scanning { background: #fffacc; border-color: #cc8800; }
+.treap-sw-hit      { background: #ddf4dd; border-color: #008800; }
+.treap-sw-miss     { background: #f4dddd; border-color: #880000; }
