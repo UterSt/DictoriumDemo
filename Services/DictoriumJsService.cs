@@ -129,24 +129,6 @@ public class DictoriumJsService(IJSRuntime js)
     public async Task<int> LpCountAsync(int handle)
         => await js.InvokeAsync<int>("DictoriumInterop.lpCount", handle);
 
-    /// <summary>
-    /// Returns a snapshot of the hash table as LpSnapshot.
-    ///
-    /// Actual WASM JSON format (verified against dictorium.wasm at runtime):
-    ///   {"capacity":8,"slots":[
-    ///     {"state":0},
-    ///     {"state":1,"key":"apple","value":"яблоко"},
-    ///     {"state":2,"key":"banana"},
-    ///     ...
-    ///   ]}
-    ///
-    ///   state 0 = empty
-    ///   state 1 = occupied  (has "key" and "value" fields)
-    ///   state 2 = tombstone (has "key", no "value")
-    ///
-    /// WASM does NOT include a top-level "count" field — computed from slots.
-    /// WASM does NOT include a home-slot "h" field — estimated via backward walk.
-    /// </summary>
     public async Task<LpSnapshot> LpSnapshotAsync(int handle)
     {
         var json = await js.InvokeAsync<string>("DictoriumInterop.lpSnapshot", handle);
@@ -167,39 +149,129 @@ public class DictoriumJsService(IJSRuntime js)
             foreach (var el in slotsEl.EnumerateArray())
             {
                 var slot = new LpSlot { Index = idx++ };
-
                 if (el.ValueKind == JsonValueKind.Object &&
                     el.TryGetProperty("state", out var stateEl))
                 {
                     switch (stateEl.GetInt32())
                     {
-                        case 1: // Occupied
+                        case 1:
                             slot.State = LpSlotState.Occupied;
                             if (el.TryGetProperty("key",   out var kEl)) slot.Key   = kEl.GetString() ?? "";
                             if (el.TryGetProperty("value", out var vEl)) slot.Value = vEl.GetString() ?? "";
                             break;
-                        case 2: // Tombstone
+                        case 2:
                             slot.State = LpSlotState.Deleted;
                             break;
-                        default: // 0 = empty
+                        default:
                             slot.State = LpSlotState.Empty;
                             break;
                     }
                 }
-                // else: malformed element → treat as empty
                 snap.Slots.Add(slot);
             }
 
-            // Count occupied slots (WASM JSON has no top-level count field)
             snap.Count = snap.Slots.Count(s => s.State == LpSlotState.Occupied);
-
-            // Estimate home slot for each occupied entry via backward-walk
             foreach (var s in snap.Slots.Where(s => s.State == LpSlotState.Occupied))
                 s.HomeSlot = snap.EstimateHomeSlot(s.Index);
 
             return snap;
         }
         catch { return new LpSnapshot(); }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  QuadraticProbingDictionary<string, string>
+    // ══════════════════════════════════════════════════════════════════════════
+
+    public async Task<int> QpCreateAsync()
+        => await js.InvokeAsync<int>("DictoriumInterop.qpCreate");
+
+    public async Task QpFreeAsync(int handle)
+        => await js.InvokeVoidAsync("DictoriumInterop.qpFree", handle);
+
+    public async Task<bool> QpContainsAsync(int handle, string key)
+        => await js.InvokeAsync<bool>("DictoriumInterop.qpContains", handle, key);
+
+    public async Task<string> QpGetAsync(int handle, string key)
+        => await js.InvokeAsync<string>("DictoriumInterop.qpGet", handle, key) ?? string.Empty;
+
+    public async Task<bool> QpAddAsync(int handle, string key, string val)
+        => await js.InvokeAsync<bool>("DictoriumInterop.qpAdd", handle, key, val);
+
+    public async Task QpInsertOrAssignAsync(int handle, string key, string val)
+        => await js.InvokeVoidAsync("DictoriumInterop.qpInsertOrAssign", handle, key, val);
+
+    public async Task<bool> QpRemoveAsync(int handle, string key)
+        => await js.InvokeAsync<bool>("DictoriumInterop.qpRemove", handle, key);
+
+    public async Task QpClearAsync(int handle)
+        => await js.InvokeVoidAsync("DictoriumInterop.qpClear", handle);
+
+    public async Task<int> QpCountAsync(int handle)
+        => await js.InvokeAsync<int>("DictoriumInterop.qpCount", handle);
+
+    public async Task<QpSnapshot> QpSnapshotAsync(int handle)
+    {
+        string json;
+        try
+        {
+            json = await js.InvokeAsync<string>("DictoriumInterop.qpSnapshot", handle) ?? "";
+        }
+        catch (Exception ex)
+        {
+            return new QpSnapshot { ParseError = $"JS interop exception: {ex.Message}" };
+        }
+
+        if (string.IsNullOrWhiteSpace(json))
+            return new QpSnapshot { ParseError = "_qp_snapshot returned null/empty." };
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root      = doc.RootElement;
+            var snap      = new QpSnapshot { RawJson = json };
+
+            if (root.TryGetProperty("capacity", out var capEl))
+                snap.Capacity = capEl.GetInt32();
+
+            if (!root.TryGetProperty("slots", out var slotsEl))
+                return snap;
+
+            int idx = 0;
+            foreach (var el in slotsEl.EnumerateArray())
+            {
+                var slot = new LpSlot { Index = idx++ };
+                if (el.ValueKind == JsonValueKind.Object &&
+                    el.TryGetProperty("state", out var stateEl))
+                {
+                    switch (stateEl.GetInt32())
+                    {
+                        case 1:
+                            slot.State = LpSlotState.Occupied;
+                            if (el.TryGetProperty("key",   out var kEl)) slot.Key   = kEl.GetString() ?? "";
+                            if (el.TryGetProperty("value", out var vEl)) slot.Value = vEl.GetString() ?? "";
+                            break;
+                        case 2:
+                            slot.State = LpSlotState.Deleted;
+                            break;
+                        default:
+                            slot.State = LpSlotState.Empty;
+                            break;
+                    }
+                }
+                snap.Slots.Add(slot);
+            }
+
+            snap.Count = snap.Slots.Count(s => s.State == LpSlotState.Occupied);
+            foreach (var s in snap.Slots.Where(s => s.State == LpSlotState.Occupied))
+                s.HomeSlot = snap.EstimateQpHomeSlot(s.Index);
+
+            return snap;
+        }
+        catch (Exception ex)
+        {
+            return new QpSnapshot { RawJson = json, ParseError = $"Parse exception: {ex.Message}" };
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -337,13 +409,6 @@ public class DictoriumJsService(IJSRuntime js)
     public async Task<int> CuckooCountAsync(int handle)
         => await js.InvokeAsync<int>("DictoriumInterop.cuckooCount", handle);
 
-    /// <summary>
-    /// Returns a snapshot of the CuckooDictionary.
-    ///
-    /// Actual WASM JSON format: [["key","value"], ...]
-    /// A flat array of occupied [key, value] pairs only.
-    /// Table positions (T1/T2) are not exposed by the snapshot.
-    /// </summary>
     public async Task<CuckooSnapshot> CuckooSnapshotAsync(int handle)
     {
         var json = await js.InvokeAsync<string>("DictoriumInterop.cuckooSnapshot", handle);
@@ -354,7 +419,6 @@ public class DictoriumJsService(IJSRuntime js)
             using var doc = JsonDocument.Parse(json);
             var root      = doc.RootElement;
 
-            // Actual format: [[key, value], ...]  — flat list of occupied pairs
             if (root.ValueKind == JsonValueKind.Array)
             {
                 int idx = 0;
@@ -377,7 +441,6 @@ public class DictoriumJsService(IJSRuntime js)
         catch (Exception ex) { snap.ParseError = ex.Message; }
         return snap;
     }
-
 
     // ══════════════════════════════════════════════════════════════════════════
     //  SkipListDictionary<string, string>
@@ -432,13 +495,11 @@ public class DictoriumJsService(IJSRuntime js)
         if (string.IsNullOrEmpty(json) || json == "[]") return new();
         try
         {
-            // Format 1: plain array  [["k","v"],...]
             if (json.TrimStart().StartsWith('['))
             {
                 var rows = JsonSerializer.Deserialize<string[][]>(json)!;
                 return rows.Select(r => new DictItem(r[0], r[1])).ToList();
             }
-            // Format 2: object  {"maxLevel":N,"entries":[["k","v"],...]}
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
             if (root.TryGetProperty("entries", out var entries))
@@ -457,10 +518,6 @@ public class DictoriumJsService(IJSRuntime js)
         catch { return new(); }
     }
 
-    /// <summary>
-    /// Parses snapshot JSON (both formats) and also returns maxLevel from the object format.
-    /// Returns (items, maxLevel) — maxLevel is -1 when not available in the JSON.
-    /// </summary>
     public static (List<DictItem> Items, int MaxLevel) ParseSnapshotWithLevel(string json)
     {
         if (string.IsNullOrEmpty(json) || json == "[]") return (new(), -1);
@@ -518,21 +575,18 @@ public class CuckooSnapshot
 {
     public int              Capacity   { get; set; }
     public int              Count      { get; set; }
-    /// <summary>Occupied entries from the flat [[key,value],...] snapshot.</summary>
     public List<CuckooSlot> Entries    { get; set; } = new();
     public string           RawJson    { get; set; } = string.Empty;
     public string           ParseError { get; set; } = string.Empty;
 
-    // T1/T2 are aliases for backward-compat and highlight logic.
-    // The WASM snapshot doesn't expose table positions, so all entries live in Entries.
     public List<CuckooSlot> T1 => Entries;
-    public List<CuckooSlot> T2 => new();   // always empty — not available from WASM
+    public List<CuckooSlot> T2 => new();
 
     public double LoadFactor => Count > 0 ? (double)Count / Math.Max(Count * 2, 8) : 0;
 
     public int FindInT1(string key) =>
         Entries.FirstOrDefault(s => s.State == CuckooSlotState.Occupied && s.Key == key)?.Index ?? -1;
-    public int FindInT2(string key) => -1;   // T2 positions not available from snapshot
+    public int FindInT2(string key) => -1;
 }
 
 public enum LpSlotState { Empty, Occupied, Deleted }
@@ -543,10 +597,6 @@ public class LpSlot
     public LpSlotState State    { get; set; }
     public string      Key      { get; set; } = string.Empty;
     public string      Value    { get; set; } = string.Empty;
-    /// <summary>
-    /// Estimated home slot — start of the contiguous run in the current table.
-    /// Set by LpSnapshot.EstimateHomeSlot() after parsing.  -1 = not computed.
-    /// </summary>
     public int         HomeSlot { get; set; } = -1;
 }
 
@@ -556,18 +606,12 @@ public class LpSnapshot
     public int          Count    { get; set; }
     public List<LpSlot> Slots    { get; set; } = new();
 
-    public double LoadFactor    => Capacity > 0 ? (double)Count / Capacity : 0;
+    public double LoadFactor     => Capacity > 0 ? (double)Count / Capacity : 0;
     public int    TombstoneCount => Slots.Count(s => s.State == LpSlotState.Deleted);
 
-    /// <summary>Find slot index where key lives, -1 if not found.</summary>
     public int FindKey(string key) =>
         Slots.FirstOrDefault(s => s.State == LpSlotState.Occupied && s.Key == key)?.Index ?? -1;
 
-    /// <summary>
-    /// Estimate the home slot for the entry at <paramref name="slotIndex"/> by
-    /// walking backward through the table until an empty slot is reached.
-    /// The first slot in the contiguous occupied/tombstone run is the home estimate.
-    /// </summary>
     public int EstimateHomeSlot(int slotIndex)
     {
         if (Capacity == 0) return slotIndex;
@@ -584,10 +628,6 @@ public class LpSnapshot
         return home;
     }
 
-    /// <summary>
-    /// Reconstruct the probe path for a key starting at homeSlot.
-    /// Returns slot indices visited until the key is found or an empty slot is hit.
-    /// </summary>
     public List<int> ProbePath(int homeSlot, string key)
     {
         var path = new List<int>();
@@ -597,6 +637,71 @@ public class LpSnapshot
         {
             int si = (homeSlot + i) % cap;
             path.Add(si);
+            var s = Slots.FirstOrDefault(x => x.Index == si);
+            if (s == null || s.State == LpSlotState.Empty) break;
+            if (s.State == LpSlotState.Occupied && s.Key == key) break;
+        }
+        return path;
+    }
+}
+
+// ── QuadraticProbingDictionary models ────────────────────────────────────────
+
+public class QpSnapshot
+{
+    public int          Capacity   { get; set; }
+    public int          Count      { get; set; }
+    public List<LpSlot> Slots      { get; set; } = new();
+    public string       RawJson    { get; set; } = string.Empty;
+    public string       ParseError { get; set; } = string.Empty;
+
+    public double LoadFactor     => Capacity > 0 ? (double)Count / Capacity : 0;
+    public int    TombstoneCount => Slots.Count(s => s.State == LpSlotState.Deleted);
+
+    public int FindKey(string key) =>
+        Slots.FirstOrDefault(s => s.State == LpSlotState.Occupied && s.Key == key)?.Index ?? -1;
+
+    /// <summary>
+    /// Try all possible home slots; pick the one whose QP path reaches
+    /// slotIndex with the shortest probe length.
+    /// </summary>
+    public int EstimateQpHomeSlot(int slotIndex)
+    {
+        if (Capacity == 0) return slotIndex;
+        int cap      = Capacity;
+        int bestHome = slotIndex;
+        int bestLen  = int.MaxValue;
+
+        for (int home = 0; home < cap; home++)
+        {
+            for (int i = 0; i < cap; i++)
+            {
+                int si = (home + i * i) % cap;
+                var s  = Slots.FirstOrDefault(x => x.Index == si);
+                if (s == null || s.State == LpSlotState.Empty) break;
+                if (si == slotIndex && s.State == LpSlotState.Occupied)
+                {
+                    if (i < bestLen) { bestLen = i; bestHome = home; }
+                    break;
+                }
+            }
+        }
+        return bestHome;
+    }
+
+    /// <summary>
+    /// Returns (slotIndex, probeStep i, quadratic offset i²) for each visited slot.
+    /// </summary>
+    public List<(int SlotIdx, int Step, int Offset)> QpProbePath(int homeSlot, string key)
+    {
+        var path = new List<(int, int, int)>();
+        if (Capacity == 0) return path;
+        int cap = Capacity;
+        for (int i = 0; i < cap; i++)
+        {
+            int offset = i * i;
+            int si     = (homeSlot + offset) % cap;
+            path.Add((si, i, offset));
             var s = Slots.FirstOrDefault(x => x.Index == si);
             if (s == null || s.State == LpSlotState.Empty) break;
             if (s.State == LpSlotState.Occupied && s.Key == key) break;

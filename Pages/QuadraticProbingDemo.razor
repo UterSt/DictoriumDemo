@@ -1,0 +1,872 @@
+@page "/demo/qp"
+@inject DictoriumJsService Dtr
+
+<PageTitle>QuadraticProbingDictionary — Демо — Dictorium</PageTitle>
+
+<div class="page-wrap">
+
+    <div class="breadcrumb">
+        <a href="">Обзор</a>
+        <span class="bc-sep">›</span>
+        <span class="bc-now">QuadraticProbingDictionary [LIVE]</span>
+    </div>
+
+    <div class="struct-head-bar">
+        <div class="struct-issue-num" style="color:var(--acc-g)">
+            dtr::QuadraticProbingDictionary&lt;string, string&gt; — реальная библиотека Dictorium через WASM
+        </div>
+        <h1 class="struct-h1">Квадратичное пробирование</h1>
+        <div class="struct-en">QuadraticProbingDictionary.h · открытая адресация · квадратичный шаг</div>
+        <p class="struct-description">
+            Открытая адресация с <strong>квадратичным шагом</strong>: при коллизии алгоритм не идёт на соседний слот,
+            а прыгает на <em>i²</em> позиций вперёд — <code>slot = (home + i²) mod cap</code>.
+            Это <strong>устраняет первичную кластеризацию</strong> линейного пробирования: занятые слоты
+            не образуют длинных цепочек, а равномерно рассредоточиваются по таблице.
+            Все вызовы идут через <code>dtr::QuadraticProbingDictionary</code>, скомпилированную в WebAssembly.
+        </p>
+        <div class="struct-tags">
+            <span class="s-tag">ContainsKey O(1) avg</span>
+            <span class="s-tag">Add O(1) avg</span>
+            <span class="s-tag">Remove O(1) avg</span>
+            <span class="s-tag">α &lt; 0.5 рекомендуется</span>
+            <span class="s-tag">Шаг: i² (0, 1, 4, 9, 16…)</span>
+            @if (_wasmReady)
+            {
+                <span class="s-tag" style="color:var(--acc-g);border-color:var(--acc-g)">● WASM готов</span>
+            }
+            else
+            {
+                <span class="s-tag" style="color:var(--acc-r)">○ Загрузка WASM...</span>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="demo-status @_statusCls">
+            <strong>@_statusIcon</strong>&nbsp; @_status
+        </div>
+    }
+
+    @if (!_wasmReady)
+    {
+        <div class="comp-hint">Загрузка WebAssembly модуля Dictorium...</div>
+    }
+    else
+    {
+        <div class="demo-layout">
+
+            <!-- ── Controls ── -->
+            <div class="demo-controls">
+
+                <div class="ctrl-section">
+                    <div class="ctrl-section-title">Ключ (Key)</div>
+                    <input class="search-input" style="width:100%;"
+                           @bind="_keyInput" @bind:event="oninput"
+                           placeholder="apple"
+                           disabled="@_busy" />
+                    <div class="ctrl-section-title" style="margin-top:6px;">Значение (Value)</div>
+                    <input class="search-input" style="width:100%;margin-bottom:0;"
+                           @bind="_valInput" @bind:event="oninput"
+                           placeholder="яблоко"
+                           disabled="@_busy" />
+                </div>
+
+                <div class="ctrl-ops">
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-search" @onclick="DoContains"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                            ▶ ContainsKey(key)
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="contains"?"active":"")" @onclick='()=>ToggleDemoTip("contains")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-search" @onclick="DoGet"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                            ▶ TryGetValue(key)
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="get"?"active":"")" @onclick='()=>ToggleDemoTip("get")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-add" @onclick="DoAdd"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                            + Add(key, value)
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="add"?"active":"")" @onclick='()=>ToggleDemoTip("add")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-add" @onclick="DoInsertOrAssign"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                            ± InsertOrAssign(key, value)
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="ioa"?"active":"")" @onclick='()=>ToggleDemoTip("ioa")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-remove" @onclick="DoRemove"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                            − Remove(key)
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="remove"?"active":"")" @onclick='()=>ToggleDemoTip("remove")'>i</span>
+                    </div>
+                    <div class="op-hint-row">
+                        <button class="btn-op btn-clear" @onclick="DoClear" disabled="@_busy">
+                            ⊘ Clear()
+                        </button>
+                        <span class="op-hint-icon @(_activeDemoTip=="clear"?"active":"")" @onclick='()=>ToggleDemoTip("clear")'>i</span>
+                    </div>
+                    <button class="btn-op btn-build" @onclick="LoadSample" disabled="@_busy">
+                        Загрузить пример
+                    </button>
+                </div>
+
+                <DemoOpHints ActiveTip="@_activeDemoTip" OnToggle="@((id) => { _activeDemoTip = id; StateHasChanged(); })" />
+
+                <div class="ctrl-info">
+                    <div class="ctrl-info-row">
+                        <span>Count</span>
+                        <span class="ctrl-info-val">@_snap.Count</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Capacity</span>
+                        <span class="ctrl-info-val">@_snap.Capacity</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Загрузка (α)</span>
+                        <span class="ctrl-info-val">@_snap.LoadFactor.ToString("F2")</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Tombstones</span>
+                        <span class="ctrl-info-val">@_snap.TombstoneCount</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Шагов поиска</span>
+                        <span class="ctrl-info-val">@(_lastProbePath.Count > 0 ? _lastProbePath.Count.ToString() : "—")</span>
+                    </div>
+                    <div class="ctrl-info-row">
+                        <span>Результат</span>
+                        <span class="ctrl-info-val">@_result</span>
+                    </div>
+                </div>
+
+                <div class="ctrl-legend">
+                    <div class="legend-title">Легенда</div>
+                    <div class="legend-row"><span class="lp-legend-dot lp-dot-empty"></span> Пустой слот</div>
+                    <div class="legend-row"><span class="lp-legend-dot lp-dot-occ"></span> Занятый слот</div>
+                    <div class="legend-row"><span class="lp-legend-dot lp-dot-del"></span> Tombstone</div>
+                    <div class="legend-row"><span class="lp-legend-dot lp-dot-probe"></span> Текущий шаг</div>
+                    <div class="legend-row"><span class="lp-legend-dot lp-dot-col"></span> Коллизия (пропуск)</div>
+                    <div class="legend-row"><span class="lp-legend-dot" style="background:#ddf4dd;border-color:#008800;"></span> Найден / вставлен</div>
+                    <div style="margin-top:8px;font-family:var(--font-ui);font-size:10px;color:var(--text-3);line-height:1.5;">
+                        <span style="border-left:3px solid #0044cc;padding-left:4px;">home</span>
+                        &nbsp;— начало probe sequence<br>
+                        Шаг i: прыжок на <strong>i²</strong> слотов от home
+                    </div>
+                </div>
+
+                <BulkGeneratePanel Disabled="@_busy" OnInsert="BulkInsertAsync" />
+
+            </div>
+
+            <!-- ── Main visualisation ── -->
+            <div class="demo-main">
+
+                <!-- ══ Probe formula panel ══ -->
+                @if (_lastProbePath.Count > 0 || _animStep >= 0)
+                {
+                    <div class="viz-section" style="margin-bottom:8px;">
+                        <div class="viz-section-head">
+                            <span class="viz-section-title">Квадратичное пробирование — текущий шаг</span>
+                        </div>
+                        <div class="qp-formula-wrap">
+                            <!-- Formula line -->
+                            <div class="qp-formula-line">
+                                <span class="qp-formula-text">slot</span>
+                                <span class="qp-formula-eq">=</span>
+                                <span class="qp-formula-text">(</span>
+                                <span class="qp-formula-home">home</span>
+                                <span class="qp-formula-eq">+</span>
+                                <span class="qp-formula-i @(_animStep >= 0 ? "qp-formula-i-active" : "")">
+                                    @(_animStep >= 0 ? $"{_animStep}²" : "i²")
+                                </span>
+                                <span class="qp-formula-eq">)</span>
+                                <span class="qp-formula-text">mod</span>
+                                <span class="qp-formula-cap">@_snap.Capacity</span>
+                                @if (_animStep >= 0)
+                                {
+                                    <span class="qp-formula-eq">=</span>
+                                    <span class="qp-formula-text">(</span>
+                                    <span class="qp-formula-home">@_probeHome</span>
+                                    <span class="qp-formula-eq">+</span>
+                                    <span class="qp-formula-i qp-formula-i-active">@(_animStep * _animStep)</span>
+                                    <span class="qp-formula-text">)</span>
+                                    <span class="qp-formula-text">mod</span>
+                                    <span class="qp-formula-cap">@_snap.Capacity</span>
+                                    <span class="qp-formula-eq">=</span>
+                                    <span class="qp-formula-result">@((_probeHome + _animStep * _animStep) % _snap.Capacity)</span>
+                                }
+                            </div>
+
+                            <!-- Step trail -->
+                            @if (_lastProbePath.Count > 0)
+                            {
+                                <div class="qp-step-trail">
+                                    @for (int pi = 0; pi < _lastProbePath.Count; pi++)
+                                    {
+                                        var (slotIdx, step, offset) = _lastProbePath[pi];
+                                        bool isCurrent = _animStep == step;
+                                        bool isFirst   = pi == 0;
+                                        bool isLast    = pi == _lastProbePath.Count - 1;
+                                        string stepCls = isCurrent   ? "qp-step-current"
+                                            : isFirst               ? "qp-step-home"
+                                            : isLast && _lastProbeHit ? "qp-step-hit"
+                                            : "qp-step-col";
+
+                                        @if (pi > 0)
+                                        {
+                                            int jump = offset - _lastProbePath[pi - 1].Offset;
+                                            <div class="qp-step-jump">
+                                                <span class="qp-jump-arrow">→</span>
+                                                <span class="qp-jump-label">+@jump</span>
+                                            </div>
+                                        }
+                                        <div class="qp-step-box @stepCls">
+                                            <div class="qp-step-slot">[@slotIdx]</div>
+                                            <div class="qp-step-meta">i=@step, +@offset</div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- ══ Hash table grid ══ -->
+                <div class="viz-section">
+                    <div class="viz-section-head">
+                        <span class="viz-section-title">Хэш-таблица — квадратичное пробирование</span>
+                        <span class="viz-section-info">
+                            @_snap.Capacity слотов · @_snap.Count элементов
+                            @if (_snap.TombstoneCount > 0)
+                            {
+                                <span> · @_snap.TombstoneCount tombstone</span>
+                            }
+                        </span>
+                    </div>
+
+                    @if (_snap.Capacity == 0 && string.IsNullOrEmpty(_snap.ParseError))
+                    {
+                        <div class="ch-empty-state">
+                            <div class="ch-empty-icon">⊟</div>
+                            <div>Таблица пуста — добавьте первый элемент</div>
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(_snap.ParseError))
+                    {
+                        <div class="qp-debug-panel">
+                            <div class="qp-debug-title">⚠ Снапшот не загрузился — диагностика</div>
+                            <div class="qp-debug-row"><strong>Ошибка:</strong> @_snap.ParseError</div>
+                            @if (!string.IsNullOrEmpty(_snap.RawJson))
+                            {
+                                <div class="qp-debug-row"><strong>Сырой JSON:</strong></div>
+                                <pre class="qp-debug-json">@(_snap.RawJson.Length > 800 ? _snap.RawJson.Substring(0, 800) + "…" : _snap.RawJson)</pre>
+                            }
+                            else
+                            {
+                                <div class="qp-debug-row">JSON пуст — откройте консоль браузера (F12 → Console) для деталей.</div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="lp-table-wrap" style="position:relative;padding-left:16px;">
+                            @foreach (var slot in _snap.Slots)
+                            {
+                                string rowCls  = GetSlotCls(slot);
+                                bool   isHome  = slot.Index == _probeHome && _probeHome >= 0;
+                                bool   isProbe = _probeCursor == slot.Index;
+
+                                <div class="lp-slot-row @rowCls @(isHome ? "lp-home" : "")">
+                                    @if (isProbe)
+                                    {
+                                        <div class="lp-probe-arrow">▶</div>
+                                    }
+
+                                    <div class="lp-slot-idx">[@slot.Index]</div>
+
+                                    <div class="lp-slot-state">
+                                        @switch (slot.State)
+                                        {
+                                            case LpSlotState.Empty:
+                                                <span class="lp-state-empty">○</span>
+                                                break;
+                                            case LpSlotState.Occupied:
+                                                <span class="lp-state-occ">●</span>
+                                                break;
+                                            case LpSlotState.Deleted:
+                                                <span class="lp-state-del">✕</span>
+                                                break;
+                                        }
+                                    </div>
+
+                                    <div class="lp-slot-body">
+                                        @if (isHome)
+                                        {
+                                            <span class="lp-home-badge">home</span>
+                                        }
+                                        @switch (slot.State)
+                                        {
+                                            case LpSlotState.Empty:
+                                                <span class="lp-slot-null">— пусто —</span>
+                                                break;
+                                            case LpSlotState.Deleted:
+                                                <span class="lp-slot-del-label">tombstone</span>
+                                                break;
+                                            case LpSlotState.Occupied:
+                                                <span class="lp-slot-key" title="@slot.Key">@TruncStr(slot.Key, 12)</span>
+                                                <span class="lp-slot-sep">→</span>
+                                                <span class="lp-slot-val" title="@slot.Value">@TruncStr(slot.Value, 12)</span>
+                                                break;
+                                        }
+                                    </div>
+
+                                    @if (slot.State == LpSlotState.Occupied
+                                         && slot.HomeSlot >= 0
+                                         && slot.HomeSlot != slot.Index)
+                                    {
+                                        <div class="lp-slot-hash">h=@slot.HomeSlot</div>
+                                    }
+
+                                    <!-- show probe step label during animation -->
+                                    @{
+                                        var _stepIdx = _lastProbePath.FindIndex(p => p.SlotIdx == slot.Index);
+                                        var stepEntry = _stepIdx >= 0 ? _lastProbePath[_stepIdx] : default;
+                                    }
+                                    @if (_stepIdx >= 0)
+                                    {
+                                        <div class="qp-slot-step-badge">i=@stepEntry.Step (+@stepEntry.Offset)</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @if (_snap.Count == 0)
+                        {
+                            <div style="text-align:center;padding:8px;font-family:var(--font-ui);
+                                        font-size:11px;color:var(--text-3);border:1px dotted var(--border);
+                                        margin-bottom:6px;">
+                                Таблица инициализирована · все @_snap.Capacity слотов пусты
+                            </div>
+                        }
+
+                        <!-- Stats bar -->
+                        <div class="lp-stats-bar">
+                            <div class="lp-stat-item">
+                                <span class="lp-stat-label">Загрузка α = n / cap</span>
+                                <div class="lp-load-bar-wrap">
+                                    <div class="lp-load-bar @LoadBarWarnCls" style="@LoadBarStyle"></div>
+                                    <span class="lp-load-val">@_snap.LoadFactor.ToString("F2")</span>
+                                </div>
+                                <div style="font-size:10px;color:var(--text-3);margin-top:2px;font-family:var(--font-ui);">
+                                    Рекомендуется α &lt; 0.5 для квадратичного пробирования
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Log -->
+                <div class="viz-section" style="margin-top:8px;">
+                    <div class="viz-section-head">
+                        <span class="viz-section-title">Лог операций</span>
+                        <button class="btn-op btn-clear"
+                                style="padding:1px 6px;font-size:10px;width:auto;"
+                                @onclick="ClearLog">
+                            очистить
+                        </button>
+                    </div>
+                    <div class="demo-log">
+                        @if (_log.Count == 0)
+                        {
+                            <div class="log-line log-miss">// нет операций</div>
+                        }
+                        else
+                        {
+                            @for (int li = _log.Count - 1; li >= 0; li--)
+                            {
+                                <div class="log-line @_log[li].Cls">@_log[li].Text</div>
+                            }
+                        }
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    /* ── QP-specific styles ─────────────────────────────────────────────── */
+
+    .qp-formula-wrap {
+        padding: 10px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .qp-formula-line {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 5px;
+        font-family: var(--font-mono);
+        font-size: 14px;
+    }
+
+    .qp-formula-text  { color: var(--text-2); }
+    .qp-formula-eq    { color: var(--text-3); }
+
+    .qp-formula-home {
+        color: #0044cc;
+        font-weight: bold;
+        background: #ddeeff;
+        padding: 1px 5px;
+        border-radius: 3px;
+    }
+    .qp-formula-i {
+        color: #7700cc;
+        font-weight: bold;
+        background: #f0e8ff;
+        padding: 1px 5px;
+        border-radius: 3px;
+        transition: background 0.2s, color 0.2s;
+    }
+    .qp-formula-i-active {
+        color: #fff;
+        background: #7700cc;
+    }
+    .qp-formula-cap {
+        color: var(--text);
+        font-weight: bold;
+    }
+    .qp-formula-result {
+        color: #006600;
+        font-weight: bold;
+        font-size: 16px;
+        background: #ddf4dd;
+        padding: 1px 7px;
+        border-radius: 4px;
+    }
+
+    /* ── Step trail ──────────────────────────────────────────────────────── */
+    .qp-step-trail {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0;
+        overflow-x: auto;
+        padding-bottom: 2px;
+    }
+
+    .qp-step-box {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 4px 8px;
+        border-radius: 5px;
+        border: 1.5px solid var(--border);
+        background: var(--bg);
+        min-width: 52px;
+        transition: background 0.15s, border-color 0.15s;
+    }
+    .qp-step-slot {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: bold;
+        color: var(--text);
+    }
+    .qp-step-meta {
+        font-family: var(--font-mono);
+        font-size: 9px;
+        color: var(--text-3);
+        margin-top: 1px;
+    }
+
+    .qp-step-home    { background: #ddeeff; border-color: #3366aa; }
+    .qp-step-home .qp-step-slot { color: #002277; }
+
+    .qp-step-col     { background: #f0e8ff; border-color: #7700cc; }
+    .qp-step-col .qp-step-slot { color: #5500aa; }
+
+    .qp-step-hit     { background: #ddf4dd; border-color: #008800; }
+    .qp-step-hit .qp-step-slot { color: #004400; }
+
+    .qp-step-current {
+        background: #fffacc;
+        border-color: #998800;
+        box-shadow: 0 0 0 2px #ffe06688;
+    }
+    .qp-step-current .qp-step-slot { color: #554400; }
+
+    .qp-step-jump {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0 3px;
+    }
+    .qp-jump-arrow {
+        color: var(--text-3);
+        font-size: 12px;
+        font-family: var(--font-mono);
+    }
+    .qp-jump-label {
+        font-size: 9px;
+        font-family: var(--font-mono);
+        color: #7700cc;
+        white-space: nowrap;
+    }
+
+    /* ── Step badge on slot rows ─────────────────────────────────────────── */
+    .qp-slot-step-badge {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 9px;
+        color: #7700cc;
+        background: #f0e8ff;
+        border: 1px solid #cc99ee;
+        border-radius: 3px;
+        padding: 0 4px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    /* ── Debug panel (shown when snapshot fails) ─────────────────────────── */
+    .qp-debug-panel {
+        margin: 8px 0;
+        padding: 10px 14px;
+        background: #fff8e8;
+        border: 1.5px solid #e8a000;
+        border-radius: 5px;
+        font-family: var(--font-ui);
+        font-size: 11px;
+    }
+    .qp-debug-title {
+        font-weight: 700;
+        color: #8a5000;
+        margin-bottom: 6px;
+        font-size: 12px;
+    }
+    .qp-debug-row {
+        color: #5a3800;
+        margin-bottom: 4px;
+        word-break: break-word;
+    }
+    .qp-debug-json {
+        background: #f5f0e0;
+        border: 1px solid #cca040;
+        border-radius: 3px;
+        padding: 6px 8px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: #333;
+        white-space: pre-wrap;
+        word-break: break-all;
+        max-height: 200px;
+        overflow-y: auto;
+        margin-top: 4px;
+    }
+</style>
+
+@code {
+    // ── State ──────────────────────────────────────────────────────────────
+    private string? _activeDemoTip;
+    private void ToggleDemoTip(string id) => _activeDemoTip = _activeDemoTip == id ? null : id;
+
+    private bool _wasmReady;
+    private bool _busy;
+    private int  _handle = -1;
+
+    private QpSnapshot _snap = new();
+
+    // Animation state
+    private int  _probeCursor = -1;
+    private int  _probeHome   = -1;
+    private int  _animStep    = -1;    // current i being highlighted
+    private bool _lastProbeHit;
+    private List<(int SlotIdx, int Step, int Offset)> _lastProbePath = new();
+    private Dictionary<int, string> _slotCls = new();
+
+    private string _keyInput   = string.Empty;
+    private string _valInput   = string.Empty;
+    private string _status     = string.Empty;
+    private string _statusCls  = string.Empty;
+    private string _statusIcon = string.Empty;
+    private string _result     = "—";
+
+    private readonly List<LogEntry> _log = new();
+    private struct LogEntry { public string Text; public string Cls; }
+
+    private const int StepMs = 380;
+
+    // ── Computed ───────────────────────────────────────────────────────────
+    private string LoadBarStyle
+    {
+        get
+        {
+            double pct = Math.Min(_snap.LoadFactor * 100.0, 100.0);
+            return $"width:{pct:F0}%";
+        }
+    }
+    private string LoadBarWarnCls => _snap.LoadFactor switch
+    {
+        > 0.75 => "lp-load-crit",
+        > 0.5  => "lp-load-warn",
+        _      => ""
+    };
+
+    // ── Lifecycle ──────────────────────────────────────────────────────────
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Dtr.InitAsync();
+        _handle    = await Dtr.QpCreateAsync();
+        _snap      = await Dtr.QpSnapshotAsync(_handle);
+        _wasmReady = true;
+        StateHasChanged();
+    }
+
+    // ── Operations ─────────────────────────────────────────────────────────
+
+    private async Task DoContains()
+    {
+        _busy = true; ClearAnim();
+        var key   = _keyInput.Trim();
+        bool found = await Dtr.QpContainsAsync(_handle, key);
+        _snap = await Dtr.QpSnapshotAsync(_handle);
+
+        int keySlot = _snap.FindKey(key);
+        await AnimateProbe(key, keySlot, found);
+
+        SetStatus($"ContainsKey({key}) → {found}", found ? "status-ok" : "status-err", found ? "✓" : "✗");
+        _result = found ? "true" : "false";
+        AddLog($"ContainsKey({key}) → {found} ({_lastProbePath.Count} шагов)", found ? "log-ok" : "log-miss");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoGet()
+    {
+        _busy = true; ClearAnim();
+        var key = _keyInput.Trim();
+        string val = await Dtr.QpGetAsync(_handle, key);
+        _snap = await Dtr.QpSnapshotAsync(_handle);
+
+        bool found   = !string.IsNullOrEmpty(val);
+        int  keySlot = _snap.FindKey(key);
+        await AnimateProbe(key, keySlot, found);
+
+        SetStatus(found ? $"TryGetValue({key}) → \"{val}\"" : $"TryGetValue({key}) → не найдено",
+                  found ? "status-ok" : "status-err", found ? "✓" : "✗");
+        _result = found ? $"\"{val}\"" : "не найдено";
+        AddLog($"Get({key}) → {(found ? val : "∅")} ({_lastProbePath.Count} шагов)", found ? "log-ok" : "log-miss");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoAdd()
+    {
+        _busy = true; ClearAnim();
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+
+        bool ok = await Dtr.QpAddAsync(_handle, key, val);
+        _snap = await Dtr.QpSnapshotAsync(_handle);
+
+        int keySlot = _snap.FindKey(key);
+        await AnimateProbe(key, keySlot, true);
+
+        if (ok)
+        {
+            SetStatus($"Add({key}, {val}) — успешно", "status-ok", "✓");
+            _result = "добавлено";
+            AddLog($"Add({key}) → slot [{keySlot}] ({_lastProbePath.Count} шагов)", "log-ok");
+        }
+        else
+        {
+            SetStatus($"Add({key}) — ключ уже существует", "status-err", "✗");
+            _result = "уже есть";
+            AddLog($"Add({key}) → already exists", "log-err");
+        }
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoInsertOrAssign()
+    {
+        _busy = true; ClearAnim();
+        var key = _keyInput.Trim();
+        var val = _valInput.Trim();
+
+        bool wasPresent = _snap.FindKey(key) >= 0;
+        await Dtr.QpInsertOrAssignAsync(_handle, key, val);
+        _snap = await Dtr.QpSnapshotAsync(_handle);
+
+        int keySlot = _snap.FindKey(key);
+        await AnimateProbe(key, keySlot, true);
+
+        string mode = wasPresent ? "обновлено" : "вставлено";
+        SetStatus($"InsertOrAssign({key}, {val}) — {mode}", "status-ok", "✓");
+        _result = mode;
+        AddLog($"InsertOrAssign({key}) → {mode}, slot [{keySlot}] ({_lastProbePath.Count} шагов)", "log-ok");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoRemove()
+    {
+        _busy = true; ClearAnim();
+        var key     = _keyInput.Trim();
+        var snapPre = _snap;
+        int keySlot = snapPre.FindKey(key);
+
+        bool ok = await Dtr.QpRemoveAsync(_handle, key);
+        _snap = await Dtr.QpSnapshotAsync(_handle);
+
+        if (ok)
+        {
+            int home = snapPre.EstimateQpHomeSlot(keySlot >= 0 ? keySlot : 0);
+            await AnimateProbeManual(snapPre, key, keySlot, home, true);
+            SetStatus($"Remove({key}) — tombstone [{keySlot}]", "status-ok", "✓");
+            _result = "удалено";
+            AddLog($"Remove({key}) → ok, tombstone [{keySlot}] ({_lastProbePath.Count} шагов)", "log-ok");
+        }
+        else
+        {
+            SetStatus($"Remove({key}) — не найден", "status-err", "✗");
+            _result = "не найдено";
+            AddLog($"Remove({key}) → miss", "log-miss");
+        }
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task DoClear()
+    {
+        _busy = true; ClearAnim();
+        await Dtr.QpClearAsync(_handle);
+        _snap = await Dtr.QpSnapshotAsync(_handle);
+        _lastProbePath.Clear();
+        SetStatus("Clear() — таблица очищена", "status-ok", "✓");
+        _result = "—";
+        AddLog("Clear()", "log-op");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task LoadSample()
+    {
+        _busy = true; ClearAnim();
+        string[] pairs =
+        {
+            "apple",  "яблоко",  "banana",  "банан",
+            "cherry", "вишня",   "date",    "финик",
+            "elderberry","бузина","fig",     "инжир",
+            "grape",  "виноград","hazel",   "лещина"
+        };
+        for (int i = 0; i < pairs.Length; i += 2)
+            await Dtr.QpAddAsync(_handle, pairs[i], pairs[i + 1]);
+        _snap = await Dtr.QpSnapshotAsync(_handle);
+        SetStatus($"Загружено {_snap.Count} пар", "status-ok", "✓");
+        AddLog($"Sample: загружено {_snap.Count} пар", "log-ok");
+        _busy = false; StateHasChanged();
+    }
+
+    private void ClearLog() => _log.Clear();
+
+    // ── Animation ──────────────────────────────────────────────────────────
+
+    private async Task AnimateProbe(string key, int keySlot, bool hit)
+    {
+        if (_snap.Capacity == 0 || keySlot < 0)
+        {
+            _lastProbePath.Clear();
+            _lastProbeHit = hit;
+            return;
+        }
+        int home = _snap.EstimateQpHomeSlot(keySlot);
+        await AnimateProbeManual(_snap, key, keySlot, home, hit);
+    }
+
+    private async Task AnimateProbeManual(QpSnapshot snap, string key, int targetSlot, int home, bool hit)
+    {
+        if (snap.Capacity == 0) return;
+
+        _probeHome     = home;
+        _lastProbeHit  = hit;
+        _lastProbePath = snap.QpProbePath(home, key);
+        _animStep      = -1;
+
+        foreach (var (slotIdx, step, offset) in _lastProbePath)
+        {
+            _animStep      = step;
+            _probeCursor   = slotIdx;
+            bool isLast    = (slotIdx == targetSlot);
+            _slotCls[slotIdx] = isLast && hit ? "lp-hit"
+                : step == 0                   ? "lp-probe"
+                :                               "lp-collision";
+            StateHasChanged();
+            await Task.Delay(StepMs);
+        }
+
+        // Keep the final probe state visible until the next operation.
+        // ClearAnim() is called at the start of every operation handler.
+        _animStep    = -1;   // stop step counter
+        _probeCursor = -1;   // remove cursor arrow
+        // _slotCls and _lastProbePath intentionally kept — they show the result.
+        StateHasChanged();
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+
+    private string GetSlotCls(LpSlot slot)
+    {
+        if (_slotCls.TryGetValue(slot.Index, out var cls)) return cls;
+        return slot.State switch
+        {
+            LpSlotState.Empty    => "lp-empty",
+            LpSlotState.Occupied => "lp-occ",
+            LpSlotState.Deleted  => "lp-del",
+            _                    => ""
+        };
+    }
+
+    private void ClearAnim()
+    {
+        _probeCursor   = -1;
+        _probeHome     = -1;
+        _animStep      = -1;
+        _lastProbePath = new();
+        _slotCls.Clear();
+    }
+
+    private void SetStatus(string msg, string cls, string icon)
+    {
+        _status = msg; _statusCls = cls; _statusIcon = icon;
+    }
+
+    private void AddLog(string text, string cls)
+    {
+        _log.Add(new LogEntry { Text = text, Cls = cls });
+        if (_log.Count > 50) _log.RemoveAt(0);
+    }
+
+    private static string TruncStr(string s, int max) =>
+        s.Length <= max ? s : s[..max] + "…";
+
+    private async Task BulkInsertAsync(List<(string Key, string Value)> pairs)
+    {
+        _busy = true; ClearAnim();
+        int added = 0;
+        foreach (var (k, v) in pairs)
+            if (await Dtr.QpAddAsync(_handle, k, v)) added++;
+        _snap = await Dtr.QpSnapshotAsync(_handle);
+        SetStatus($"Сгенерировано: добавлено {added} из {pairs.Count}", "status-ok", "✓");
+        AddLog($"Генерация: +{added} элементов", "log-ok");
+        _busy = false;
+        StateHasChanged();
+    }
+}

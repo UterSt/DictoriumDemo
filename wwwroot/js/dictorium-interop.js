@@ -175,6 +175,42 @@ window.DictoriumInterop = (() => {
     }
 
     // ══════════════════════════════════════════════════════════════════════
+    //  QuadraticProbingDictionary
+    // ══════════════════════════════════════════════════════════════════════
+
+    function qpCreate()  { return mod._qp_create(); }
+    function qpFree(h)   { mod._qp_free(h); }
+    function qpClear(h)  { mod._qp_clear(h); }
+    function qpCount(h)  { return mod._qp_count(h); }
+
+    function qpContains(h, key) {
+        return withStr(key, kp => mod._qp_contains(h, kp) === 1);
+    }
+    function qpGet(h, key) {
+        return withStr(key, kp => readAndFree(mod._qp_get(h, kp)));
+    }
+    function qpAdd(h, key, val) {
+        return withStr2(key, val, (kp, vp) => mod._qp_add(h, kp, vp) === 1);
+    }
+    function qpInsertOrAssign(h, key, val) {
+        withStr2(key, val, (kp, vp) => mod._qp_insert_or_assign(h, kp, vp));
+    }
+    function qpRemove(h, key) {
+        return withStr(key, kp => mod._qp_remove(h, kp) === 1);
+    }
+    function qpSnapshot(h) {
+        try {
+            const ptr = mod._qp_snapshot(h);
+            if (!ptr) return null;
+            const json = mod.UTF8ToString(ptr);
+            mod._free(ptr);
+            return json || null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
     //  ChainingDictionary
     // ══════════════════════════════════════════════════════════════════════
 
@@ -309,6 +345,10 @@ window.DictoriumInterop = (() => {
         lpCreate, lpFree, lpAdd, lpInsertOrAssign,
         lpContains, lpGet, lpRemove, lpClear,
         lpCount, lpSnapshot,
+
+        qpCreate, qpFree, qpAdd, qpInsertOrAssign,
+        qpContains, qpGet, qpRemove, qpClear,
+        qpCount, qpSnapshot,
 
         chainingCreate, chainingFree, chainingAdd, chainingInsertOrAssign,
         chainingContains, chainingGet, chainingRemove, chainingClear,
