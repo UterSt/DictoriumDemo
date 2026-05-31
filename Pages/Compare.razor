@@ -1,4 +1,6 @@
 @page "/compare"
+@using Microsoft.AspNetCore.Components.Rendering
+@inject DictoriumJsService Dtr
 @inject DataStructureService DS
 @inject NavigationManager Nav
 
@@ -7,8 +9,9 @@
 <div class="compare-page-wrap">
 
     <h1 class="compare-h1">Сравнение структур данных</h1>
-    <p class="compare-sub">Выберите до 3 структур для параллельного сравнения.</p>
+    <p class="compare-sub">Выберите до 3 структур — операции выполняются синхронно во всех выбранных.</p>
 
+    <!-- ═══ Selector ═══ -->
     <div class="selector-area">
         @for (int i = 0; i < 3; i++)
         {
@@ -31,16 +34,21 @@
                             <strong>@selected.NameRu</strong>
                             <small>@cat?.NameRu</small>
                         </div>
-                        <button class="slot-rm" @onclick="() => _selected[idx] = null">&#10005;</button>
+                        <button class="slot-rm" @onclick="() => RemoveSlot(idx)">&#10005;</button>
                     </div>
                 }
 
                 <div class="slot-drop">
                     @foreach (var cat in DS.GetAllCategories())
                     {
+                        var supportedStructures = cat.Structures
+                            .Where(s => s.Slug != "b-tree" && s.Slug != "b-plus-tree")
+                            .ToList();
+                        if (!supportedStructures.Any()) continue;
+
                         <div class="dd-grp">
                             <div class="dd-grp-lbl" style="color: @cat.AccentColor">@cat.Icon &nbsp;@cat.NameRu</div>
-                            @foreach (var s in cat.Structures)
+                            @foreach (var s in supportedStructures)
                             {
                                 bool alreadyPicked = _selected.Any(x => x?.Slug == s.Slug);
                                 <button class="dd-item @(selected?.Slug == s.Slug ? "selected" : "") @(alreadyPicked && selected?.Slug != s.Slug ? "disabled" : "")"
@@ -64,132 +72,190 @@
 
     @if (active.Count >= 2)
     {
-        <div class="table-wrap">
-            <table class="comp-table">
-                <thead>
-                    <tr>
-                        <th class="lbl-th">Параметр</th>
-                        @foreach (var s in active)
-                        {
-                            var cat = DS.GetCategoryForStructure(s.Slug);
-                            <th>
-                                <div class="ct-head-inner">
-                                    <span>@cat?.Icon</span>
-                                    <strong>@s.NameRu</strong>
-                                    <small>@s.Name</small>
-                                </div>
-                            </th>
-                        }
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr class="section-tr">
-                        <td colspan="@(active.Count + 1)">Временная сложность</td>
-                    </tr>
-                    <tr>
-                        <td class="lbl-td">&#128269; Поиск</td>
-                        @foreach (var s in active)
-                        {
-                            <td><span class="ct-mono">@s.TimeComplexitySearch</span></td>
-                        }
-                    </tr>
-                    <tr>
-                        <td class="lbl-td">&#43; Вставка</td>
-                        @foreach (var s in active)
-                        {
-                            <td><span class="ct-mono">@s.TimeComplexityInsert</span></td>
-                        }
-                    </tr>
-                    <tr>
-                        <td class="lbl-td">&#10005; Удаление</td>
-                        @foreach (var s in active)
-                        {
-                            <td><span class="ct-mono">@s.TimeComplexityDelete</span></td>
-                        }
-                    </tr>
-                    <tr>
-                        <td class="lbl-td">&#128190; Память</td>
-                        @foreach (var s in active)
-                        {
-                            <td><span class="ct-mono">@s.SpaceComplexity</span></td>
-                        }
-                    </tr>
-
-                    <tr class="section-tr">
-                        <td colspan="@(active.Count + 1)">Достоинства</td>
-                    </tr>
-                    <tr>
-                        <td class="lbl-td">&#43; Плюсы</td>
-                        @foreach (var s in active)
-                        {
-                            <td>
-                                @foreach (var pro in s.Pros)
-                                {
-                                    <span class="ct-item pro">@pro</span>
-                                }
-                            </td>
-                        }
-                    </tr>
-
-                    <tr class="section-tr">
-                        <td colspan="@(active.Count + 1)">Недостатки</td>
-                    </tr>
-                    <tr>
-                        <td class="lbl-td">&#8722; Минусы</td>
-                        @foreach (var s in active)
-                        {
-                            <td>
-                                @foreach (var con in s.Cons)
-                                {
-                                    <span class="ct-item con">@con</span>
-                                }
-                            </td>
-                        }
-                    </tr>
-
-                    <tr class="section-tr">
-                        <td colspan="@(active.Count + 1)">Применение</td>
-                    </tr>
-                    <tr>
-                        <td class="lbl-td">&#9702; Использование</td>
-                        @foreach (var s in active)
-                        {
-                            <td>
-                                @foreach (var uc in s.UseCases)
-                                {
-                                    <span class="ct-item use">@uc</span>
-                                }
-                            </td>
-                        }
-                    </tr>
-
-                    <tr class="section-tr">
-                        <td colspan="@(active.Count + 1)">Визуализация</td>
-                    </tr>
-                    <tr>
-                        <td class="lbl-td">Демо</td>
-                        @foreach (var s in active)
-                        {
-                            var cat = DS.GetCategoryForStructure(s.Slug);
-                            <td class="ct-viz-td">
-                                @cat?.Icon<br />
-                                Dictorium &middot; @s.Name
-                            </td>
-                        }
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <div class="comp-links">
-            @foreach (var s in active)
+        <!-- ═══ WASM status ═══ -->
+        <div class="cmp-wasm-bar">
+            @if (!_wasmReady)
             {
-                var cat = DS.GetCategoryForStructure(s.Slug);
-                <span class="comp-link">
-                    @cat?.Icon &nbsp;@s.NameRu &#8594;
-                </span>
+                <span class="cmp-wasm-loading">○ Загрузка WebAssembly модуля Dictorium...</span>
+            }
+            else
+            {
+                <span class="cmp-wasm-ok">● WASM готов</span>
+                <span class="cmp-wasm-sep">·</span>
+                <span class="cmp-wasm-note">Все операции выполняются синхронно в реальных экземплярах структур</span>
             }
         </div>
+
+        @if (_wasmReady)
+        {
+            <!-- ═══ Sync controls — sticky at top ═══ -->
+            <div class="cmp-ctrl-bar">
+                <div class="cmp-ctrl-inputs">
+                    <div class="cmp-ctrl-field">
+                        <label class="cmp-ctrl-lbl">Ключ</label>
+                        <input class="search-input cmp-input" @bind="_keyInput" @bind:event="oninput"
+                               placeholder="apple" disabled="@_busy" />
+                    </div>
+                    <div class="cmp-ctrl-field">
+                        <label class="cmp-ctrl-lbl">Значение</label>
+                        <input class="search-input cmp-input" @bind="_valInput" @bind:event="oninput"
+                               placeholder="яблоко" disabled="@_busy" />
+                    </div>
+                </div>
+                <div class="cmp-ctrl-ops">
+                    <button class="btn-op btn-search" @onclick="DoContains"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                        ▶ ContainsKey
+                    </button>
+                    <button class="btn-op btn-add" @onclick="DoAdd"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                        + Add
+                    </button>
+                    <button class="btn-op btn-add" @onclick="DoInsertOrAssign"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput))">
+                        ± InsertOrAssign
+                    </button>
+                    <button class="btn-op btn-remove" @onclick="DoRemove"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_keyInput))">
+                        − Remove
+                    </button>
+                    <button class="btn-op btn-clear" @onclick="DoClear" disabled="@_busy">
+                        ⊘ Clear
+                    </button>
+                    <button class="btn-op" @onclick="LoadSample" disabled="@_busy">
+                        Загрузить пример
+                    </button>
+                </div>
+                @if (!string.IsNullOrEmpty(_globalStatus))
+                {
+                    <div class="cmp-global-status @_globalStatusCls">
+                        <strong>@_globalStatusIcon</strong>&nbsp; @_globalStatus
+                    </div>
+                }
+            </div>
+
+            <!-- ═══ Live visualization panels — RIGHT BELOW controls ═══ -->
+            <div class="cmp-viz-grid cmp-viz-cols-@active.Count">
+                @foreach (var s in active)
+                {
+                    var cat = DS.GetCategoryForStructure(s.Slug);
+                    var st  = GetState(s.Slug);
+                    <div class="cmp-viz-panel">
+                        <div class="cmp-viz-panel-head" style="border-top: 3px solid @(cat?.AccentColor ?? "#4ade80")">
+                            <span class="cmp-viz-panel-icon">@cat?.Icon</span>
+                            <div>
+                                <div class="cmp-viz-panel-name">@s.NameRu</div>
+                                <div class="cmp-viz-panel-eng">@s.Name</div>
+                            </div>
+                            <div class="cmp-viz-panel-meta">
+                                <span class="cmp-meta-item">n=@st.Count</span>
+                                @if (st.Capacity > 0)
+                                {
+                                    <span class="cmp-meta-item">cap=@st.Capacity</span>
+                                    <span class="cmp-meta-item">α=@st.LoadFactor.ToString("F2")</span>
+                                }
+                                @if (st.Height > 0)
+                                {
+                                    <span class="cmp-meta-item">h=@st.Height</span>
+                                }
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(st.LastResult))
+                        {
+                            <div class="cmp-viz-result @st.ResultCls">@st.LastResult</div>
+                        }
+
+                        <div class="cmp-viz-body">
+                            @RenderViz(s.Slug, st)
+                        </div>
+
+                        <div class="cmp-viz-log">
+                            @foreach (var line in st.Log.TakeLast(6))
+                            {
+                                <div class="log-line @line.Cls">@line.Text</div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- ═══ Complexity table — below visualizations ═══ -->
+            <div class="table-wrap" style="margin-top: 12px;">
+                <table class="comp-table">
+                    <thead>
+                        <tr>
+                            <th class="lbl-th">Параметр</th>
+                            @foreach (var s in active)
+                            {
+                                var cat = DS.GetCategoryForStructure(s.Slug);
+                                <th>
+                                    <div class="ct-head-inner">
+                                        <span>@cat?.Icon</span>
+                                        <strong>@s.NameRu</strong>
+                                        <small>@s.Name</small>
+                                    </div>
+                                </th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="section-tr"><td colspan="@(active.Count + 1)">Временная сложность</td></tr>
+                        <tr>
+                            <td class="lbl-td">&#128269; Поиск</td>
+                            @foreach (var s in active)
+                            {
+                                <td><span class="@ComplexityColorCls(s.TimeComplexitySearch)">@s.TimeComplexitySearch</span></td>
+                            }
+                        </tr>
+                        <tr>
+                            <td class="lbl-td">&#43; Вставка</td>
+                            @foreach (var s in active)
+                            {
+                                <td><span class="@ComplexityColorCls(s.TimeComplexityInsert)">@s.TimeComplexityInsert</span></td>
+                            }
+                        </tr>
+                        <tr>
+                            <td class="lbl-td">&#10005; Удаление</td>
+                            @foreach (var s in active)
+                            {
+                                <td><span class="@ComplexityColorCls(s.TimeComplexityDelete)">@s.TimeComplexityDelete</span></td>
+                            }
+                        </tr>
+                        <tr>
+                            <td class="lbl-td">&#128190; Память</td>
+                            @foreach (var s in active)
+                            {
+                                <td><span class="ct-mono">@s.SpaceComplexity</span></td>
+                            }
+                        </tr>
+                        <tr class="section-tr"><td colspan="@(active.Count + 1)">Достоинства и недостатки</td></tr>
+                        <tr>
+                            <td class="lbl-td">&#43; Плюсы</td>
+                            @foreach (var s in active)
+                            {
+                                <td>@foreach (var pro in s.Pros) { <span class="ct-item pro">@pro</span> }</td>
+                            }
+                        </tr>
+                        <tr>
+                            <td class="lbl-td">&#8722; Минусы</td>
+                            @foreach (var s in active)
+                            {
+                                <td>@foreach (var con in s.Cons) { <span class="ct-item con">@con</span> }</td>
+                            }
+                        </tr>
+                        <tr class="section-tr"><td colspan="@(active.Count + 1)">Применение</td></tr>
+                        <tr>
+                            <td class="lbl-td">&#9702; Use cases</td>
+                            @foreach (var s in active)
+                            {
+                                <td>@foreach (var uc in s.UseCases) { <span class="ct-item use">@uc</span> }</td>
+                            }
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        }
     }
     else if (active.Count == 1)
     {
@@ -202,22 +268,1259 @@
 
 </div>
 
-@code {
-    [SupplyParameterFromQuery(Name = "a")]
-    public string? PreloadA { get; set; }
+<style>
+.cmp-wasm-bar {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    padding: 5px 12px;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.cmp-wasm-loading { color: var(--acc-r); }
+.cmp-wasm-ok      { color: var(--acc-g); font-weight: bold; }
+.cmp-wasm-sep     { color: var(--border); }
+.cmp-wasm-note    { color: var(--text-3); }
 
+.cmp-ctrl-bar {
+    background: var(--bg-alt);
+    border: 1px solid var(--border-dk);
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: flex-end;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+.cmp-ctrl-inputs { display: flex; gap: 8px; flex-wrap: wrap; }
+.cmp-ctrl-field  { display: flex; flex-direction: column; gap: 3px; }
+.cmp-ctrl-lbl    { font-family: var(--font-ui); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.4px; }
+.cmp-input       { min-width: 130px; margin-bottom: 0 !important; }
+.cmp-ctrl-ops    { display: flex; flex-wrap: wrap; gap: 4px; align-items: flex-end; }
+
+.cmp-global-status {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    align-self: flex-end;
+}
+.cmp-global-status.status-ok  { background: #ddffdd; color: #004400; border-color: #88cc88; }
+.cmp-global-status.status-err { background: #ffdddd; color: #440000; border-color: #cc8888; }
+
+.ct-mono-o1   { font-family: var(--font-mono); font-size: 13px; font-weight: bold; color: #00aa44; }
+.ct-mono-olog { font-family: var(--font-mono); font-size: 13px; font-weight: bold; color: #0066cc; }
+.ct-mono-on   { font-family: var(--font-mono); font-size: 13px; font-weight: bold; color: #cc4400; }
+.ct-mono-na   { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); font-style: italic; }
+
+.cmp-viz-grid { display: grid; gap: 8px; margin-top: 0; }
+.cmp-viz-cols-2 { grid-template-columns: 1fr 1fr; }
+.cmp-viz-cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+.cmp-viz-panel {
+    border: 1px solid var(--border-dk);
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.cmp-viz-panel-head {
+    background: var(--bg-nav);
+    color: #ffffff;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.cmp-viz-panel-icon { font-size: 18px; }
+.cmp-viz-panel-name { font-family: var(--font-serif); font-size: 13px; font-weight: bold; line-height: 1.2; }
+.cmp-viz-panel-eng  { font-family: var(--font-mono); font-size: 10px; color: #aaccee; }
+.cmp-viz-panel-meta { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.cmp-meta-item      { font-family: var(--font-mono); font-size: 10px; color: #aaccee; white-space: nowrap; }
+
+.cmp-viz-result {
+    padding: 3px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    border-bottom: 1px solid var(--border);
+}
+.cmp-viz-result.status-ok   { background: #ddffdd; color: #004400; }
+.cmp-viz-result.status-err  { background: #ffdddd; color: #440000; }
+.cmp-viz-result.status-warn { background: #fff8cc; color: #554400; }
+
+.cmp-viz-body {
+    padding: 6px 8px;
+    flex: 1;
+    overflow-x: auto;
+    min-height: 120px;
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+.cmp-viz-log {
+    border-top: 1px solid var(--border);
+    padding: 3px 8px;
+    max-height: 72px;
+    overflow-y: auto;
+    background: var(--bg-alt);
+}
+
+/* ── Hash table slot rows ── */
+.cmp-lp-slot {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px;
+    margin-bottom: 1px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    border: 1px solid transparent;
+    border-radius: 2px;
+}
+.cmp-lp-slot.lp-empty { color: var(--text-3); background: var(--bg-alt); border-color: var(--border); }
+.cmp-lp-slot.lp-occ   { color: var(--text);   background: #f0f8f0;       border-color: #88cc88; }
+.cmp-lp-slot.lp-del   { color: var(--text-3); background: #f8f0f0;       border-color: #cc8888; text-decoration: line-through; }
+.cmp-lp-idx  { min-width: 22px; color: var(--text-3); }
+.cmp-lp-dot  { font-size: 8px; min-width: 10px; }
+.cmp-lp-key  { font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70px; }
+.cmp-lp-sep  { color: var(--text-3); }
+.cmp-lp-val  { color: var(--acc-b); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70px; }
+.cmp-lp-home { margin-left: auto; font-size: 9px; color: #0044cc; border-left: 2px solid #0044cc; padding-left: 3px; }
+
+/* ── Cuckoo ── */
+.cmp-ck-table  { margin-bottom: 6px; }
+.cmp-ck-label  { font-family: var(--font-ui); font-size: 9px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 0; }
+.cmp-ck-slots  { display: flex; flex-wrap: wrap; gap: 2px; }
+.cmp-ck-slot   { border: 1px solid #8899cc; background: #eef2ff; min-width: 62px; padding: 2px 4px; font-family: var(--font-mono); font-size: 9px; text-align: center; }
+.cmp-ck-slot.ck-t2    { background: #f2eeff; border-color: #9966bb; }
+.cmp-ck-slot.ck-empty { background: var(--bg-alt); border-color: var(--border); }
+.cmp-ck-slot.ck-found { background: #e0ffe8; border-color: var(--acc-g); }
+.cmp-ck-idx { font-size: 8px; color: var(--text-3); }
+.cmp-ck-key { font-weight: bold; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 58px; }
+.cmp-ck-val { color: var(--acc-b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 58px; }
+
+/* ── Chaining ── */
+.cmp-chain-bucket { display: flex; align-items: flex-start; gap: 4px; margin-bottom: 2px; font-family: var(--font-mono); font-size: 10px; }
+.cmp-chain-idx   { min-width: 22px; color: var(--text-3); }
+.cmp-chain-items { display: flex; flex-wrap: wrap; gap: 2px; }
+.cmp-chain-item  { background: #eef8ee; border: 1px solid #88cc88; padding: 1px 4px; font-size: 9px; white-space: nowrap; }
+.cmp-chain-empty { color: var(--text-3); font-style: italic; font-size: 9px; }
+
+/* ── Linear dict ── */
+.cmp-linear-item { display: flex; align-items: center; gap: 4px; padding: 2px 4px; margin-bottom: 1px; font-family: var(--font-mono); font-size: 10px; border: 1px solid var(--border); background: var(--bg-alt); }
+.cmp-linear-idx  { color: var(--text-3); min-width: 18px; font-size: 9px; }
+
+/* ── Perfect hash ── */
+.cmp-ph-item { display: flex; gap: 4px; padding: 2px 4px; font-family: var(--font-mono); font-size: 10px; border: 1px solid var(--border); margin-bottom: 1px; background: var(--bg-alt); }
+.cmp-ph-note { font-size: 9px; color: var(--text-3); font-style: italic; padding: 4px; font-family: var(--font-ui); }
+
+/* ── Tree / SVG wrappers ── */
+.cmp-tree-wrap { overflow-x: auto; background: #ffffff; }
+.cmp-sl-wrap   { overflow-x: auto; background: #ffffff; }
+
+/* ── Load bar ── */
+.cmp-load-bar-wrap { display: flex; align-items: center; gap: 4px; margin-top: 3px; padding: 0 2px; }
+.cmp-load-bar-bg   { flex: 1; height: 6px; background: var(--border); border: 1px solid var(--border-dk); }
+.cmp-load-bar-fill { height: 100%; background: var(--acc-g); transition: width .3s; }
+.cmp-load-bar-fill.warn { background: #e5a000; }
+.cmp-load-bar-fill.crit { background: var(--acc-r); }
+.cmp-load-val { font-family: var(--font-mono); font-size: 9px; color: var(--text-3); white-space: nowrap; }
+
+/* ── RBT legend inside panel ── */
+.cmp-rbt-legend { display: flex; gap: 10px; flex-wrap: wrap; padding: 3px 2px 4px; font-family: var(--font-ui); font-size: 9px; color: var(--text-3); }
+.cmp-rbt-swatch { display: inline-block; width: 18px; height: 10px; border: 1px solid; vertical-align: middle; margin-right: 3px; }
+.cmp-rbt-swatch-b { background: #e8edf5; border-color: #445566; }
+.cmp-rbt-swatch-r { background: #fde8e8; border-color: #cc3333; }
+</style>
+
+@code {
+    // ══ Query params ═════════════════════════════════════════════════════════
+    [SupplyParameterFromQuery(Name = "a")] public string? PreloadA { get; set; }
+
+    // ══ Selection ════════════════════════════════════════════════════════════
     private DataStructureInfo?[] _selected = new DataStructureInfo?[3];
+
+    // ══ WASM ═════════════════════════════════════════════════════════════════
+    private bool _wasmReady;
+
+    // ══ Inputs ═══════════════════════════════════════════════════════════════
+    private string _keyInput = "";
+    private string _valInput = "";
+    private bool   _busy;
+
+    // ══ Global status ═════════════════════════════════════════════════════════
+    private string _globalStatus     = "";
+    private string _globalStatusCls  = "";
+    private string _globalStatusIcon = "";
+
+    // ══ Per-structure state ═══════════════════════════════════════════════════
+
+    private record LogLine(string Text, string Cls);
+
+    private class StructureState
+    {
+        public int  WasmHandle  = -1;
+        public bool Initialized;
+
+        public int    Count;
+        public int    Capacity;
+        public int    Height;
+        public int    BlackHeight;
+        public double LoadFactor;
+        public int    MaxLevel;
+
+        public string LastResult = "";
+        public string ResultCls  = "";
+
+        public readonly List<LogLine> Log = new();
+
+        // Hash table snapshots
+        public LpSnapshot?  LpSnap;
+        public QpSnapshot?  QpSnap;
+        public DhSlot[]?    DhTable;
+        public RhSlot[]?    RhTable;
+        public List<ChainBucket>? ChainBuckets;
+
+        // Cuckoo — proper T1/T2
+        public List<CkSlotForViz> CkT1 = new();
+        public List<CkSlotForViz> CkT2 = new();
+
+        // Perfect hash
+        public List<DictItem>? PhItems;
+        public int  PhHandle = -1;
+        public bool PhBuilt;
+
+        // Trees — SVG
+        public string TreeSvg = "";
+
+        // Skip list — SVG
+        public List<DictItem>?            SlItems;
+        public Dictionary<string, int>    SlNodeLevels = new();
+        public string                     SlSvg = "";
+    }
+
+    private class CkSlotForViz
+    {
+        public int    Idx;
+        public string Key   = "";
+        public string Value = "";
+        public bool   Occupied => !string.IsNullOrEmpty(Key);
+    }
+
+    // DH slot (C# simulation)
+    private enum DhState { Empty, Occupied, Deleted }
+    private class DhSlot
+    {
+        public DhState State    = DhState.Empty;
+        public string  Key      = "";
+        public string  Value    = "";
+        public int     HomeSlot = -1;
+    }
+
+    // RH slot (C# simulation)
+    private enum RhState { Empty, Occupied }
+    private class RhSlot
+    {
+        public RhState State    = RhState.Empty;
+        public string  Key      = "";
+        public string  Value    = "";
+        public int     HomeSlot = -1;
+        public int     Psl;
+    }
+
+    // RBT (C# implementation)
+    private enum RbColor { Red, Black }
+    private class RbtNode
+    {
+        public string   Key   = "";
+        public string   Value = "";
+        public RbColor  Color = RbColor.Black;
+        public RbtNode? Left, Right, Parent;
+    }
+
+    private Dictionary<string, StructureState> _states   = new();
+    private Dictionary<string, RbtNode?>       _rbtRoots = new();
+    private Dictionary<string, RbtNode>        _rbtNils  = new();
+
+    private StructureState GetState(string slug)
+    {
+        if (!_states.TryGetValue(slug, out var st)) { st = new StructureState(); _states[slug] = st; }
+        return st;
+    }
+
+    private RbtNode GetNil(string slug) =>
+        _rbtNils.TryGetValue(slug, out var n) ? n : new RbtNode { Color = RbColor.Black };
+
+    // ══ Lifecycle ═════════════════════════════════════════════════════════════
 
     protected override void OnInitialized()
     {
         if (!string.IsNullOrEmpty(PreloadA))
-        {
             _selected[0] = DS.GetStructure(PreloadA);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Dtr.InitAsync();
+        _wasmReady = true;
+        foreach (var s in _selected.Where(s => s != null).Select(s => s!))
+            await EnsureInitAsync(s.Slug);
+        StateHasChanged();
+    }
+
+    // ══ Selection ════════════════════════════════════════════════════════════
+
+    private async Task Select(int slot, DataStructureInfo s)
+    {
+        if (_selected[slot]?.Slug == s.Slug) { _selected[slot] = null; return; }
+        _selected[slot] = s;
+        if (_wasmReady) await EnsureInitAsync(s.Slug);
+        StateHasChanged();
+    }
+
+    private void RemoveSlot(int idx) { _selected[idx] = null; StateHasChanged(); }
+
+    // ══ Init ═════════════════════════════════════════════════════════════════
+
+    private async Task EnsureInitAsync(string slug)
+    {
+        var st = GetState(slug);
+        if (st.Initialized) return;
+        switch (slug)
+        {
+            case "open-hashing":       st.WasmHandle = await Dtr.ChainingCreateAsync(); break;
+            case "linear-probing":     st.WasmHandle = await Dtr.LpCreateAsync();       break;
+            case "quadratic-probing":  st.WasmHandle = await Dtr.QpCreateAsync();       break;
+            case "double-hashing":     st.DhTable = NewDhTable(11);                     break;
+            case "robin-hood-hashing": st.RhTable = NewRhTable(11);                     break;
+            case "cuckoo-hashing":     st.WasmHandle = await Dtr.CuckooCreateAsync();   break;
+            case "perfect-hashing":    st.PhItems = new(); st.PhBuilt = false;           break;
+            case "avl-tree":           st.WasmHandle = await Dtr.AvlCreateAsync();       break;
+            case "red-black-tree":
+                _rbtRoots[slug] = null;
+                _rbtNils[slug]  = new RbtNode { Color = RbColor.Black };
+                break;
+            case "skip-list":          st.WasmHandle = await Dtr.SlCreateAsync();       break;
+            case "cartesian-tree":     st.WasmHandle = await Dtr.TreapCreateAsync();    break;
+        }
+        st.Initialized = true;
+        await RefreshAsync(slug);
+    }
+
+    // ══ Sync operations ═══════════════════════════════════════════════════════
+
+    private async Task DoContains()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+        SetGlobalStatus($"ContainsKey(\"{key}\")...", "", "▶");
+        await Task.WhenAll(_selected.Where(s => s != null).Select(s => s!.Slug).Select(slug => ContainsAsync(slug, key)));
+        SetGlobalStatus($"ContainsKey(\"{key}\") выполнено", "status-ok", "✓");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task ContainsAsync(string slug, string key)
+    {
+        var st = GetState(slug);
+        await EnsureInitAsync(slug);
+        bool found = await SlugContainsAsync(slug, st, key);
+        st.LastResult = found ? $"ContainsKey(\"{key}\") → true" : $"ContainsKey(\"{key}\") → false";
+        st.ResultCls  = found ? "status-ok" : "status-err";
+        AddLog(st, st.LastResult, found ? "log-ok" : "log-miss");
+        await RefreshAsync(slug);
+    }
+
+    private async Task DoAdd()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim(); var val = _valInput.Trim();
+        SetGlobalStatus($"Add(\"{key}\", \"{val}\")...", "", "+");
+        await Task.WhenAll(_selected.Where(s => s != null).Select(s => s!.Slug).Select(slug => AddAsync(slug, key, val)));
+        SetGlobalStatus($"Add(\"{key}\") выполнено", "status-ok", "✓");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task AddAsync(string slug, string key, string val)
+    {
+        var st = GetState(slug); await EnsureInitAsync(slug);
+        bool ok = await SlugAddAsync(slug, st, key, val);
+        st.LastResult = ok ? $"Add(\"{key}\") → ok" : $"Add(\"{key}\") → dup";
+        st.ResultCls  = ok ? "status-ok" : "status-warn";
+        AddLog(st, ok ? $"+ Add(\"{key}\",\"{val}\")" : $"✗ dup: \"{key}\"", ok ? "log-ok" : "log-err");
+        await RefreshAsync(slug);
+    }
+
+    private async Task DoInsertOrAssign()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput) || string.IsNullOrWhiteSpace(_valInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim(); var val = _valInput.Trim();
+        SetGlobalStatus($"InsertOrAssign(\"{key}\")...", "", "±");
+        await Task.WhenAll(_selected.Where(s => s != null).Select(s => s!.Slug).Select(slug => InsertOrAssignAsync(slug, key, val)));
+        SetGlobalStatus($"InsertOrAssign(\"{key}\") выполнено", "status-ok", "✓");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task InsertOrAssignAsync(string slug, string key, string val)
+    {
+        var st = GetState(slug); await EnsureInitAsync(slug);
+        await SlugInsertOrAssignAsync(slug, st, key, val);
+        st.LastResult = $"InsertOrAssign(\"{key}\") → ok"; st.ResultCls = "status-ok";
+        AddLog(st, $"± InsertOrAssign(\"{key}\",\"{val}\")", "log-ok");
+        await RefreshAsync(slug);
+    }
+
+    private async Task DoRemove()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_keyInput)) return;
+        _busy = true;
+        var key = _keyInput.Trim();
+        SetGlobalStatus($"Remove(\"{key}\")...", "", "−");
+        await Task.WhenAll(_selected.Where(s => s != null).Select(s => s!.Slug).Select(slug => RemoveAsync(slug, key)));
+        SetGlobalStatus($"Remove(\"{key}\") выполнено", "status-ok", "✓");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task RemoveAsync(string slug, string key)
+    {
+        var st = GetState(slug); await EnsureInitAsync(slug);
+        bool ok = await SlugRemoveAsync(slug, st, key);
+        st.LastResult = ok ? $"Remove(\"{key}\") → ok" : $"Remove(\"{key}\") → not found";
+        st.ResultCls  = ok ? "status-ok" : "status-err";
+        AddLog(st, ok ? $"− Remove(\"{key}\")" : $"✗ not found: \"{key}\"", ok ? "log-ok" : "log-miss");
+        await RefreshAsync(slug);
+    }
+
+    private async Task DoClear()
+    {
+        if (_busy) return;
+        _busy = true;
+        SetGlobalStatus("Clear()...", "", "⊘");
+        await Task.WhenAll(_selected.Where(s => s != null).Select(s => s!.Slug).Select(slug => ClearAsync(slug)));
+        SetGlobalStatus("Clear() выполнено", "status-ok", "✓");
+        _busy = false; StateHasChanged();
+    }
+
+    private async Task ClearAsync(string slug)
+    {
+        var st = GetState(slug); await EnsureInitAsync(slug);
+        await SlugClearAsync(slug, st);
+        st.LastResult = "Clear()"; st.ResultCls = "";
+        AddLog(st, "⊘ Clear()", "log-op");
+        await RefreshAsync(slug);
+    }
+
+    private static readonly (string Key, string Value)[] SamplePairs =
+    {
+        ("apple","яблоко"), ("banana","банан"), ("cherry","вишня"), ("date","финик"),
+        ("elderberry","бузина"), ("fig","инжир"), ("grape","виноград"), ("honeydew","дыня")
+    };
+
+    private async Task LoadSample()
+    {
+        if (_busy) return;
+        _busy = true;
+        SetGlobalStatus("Загрузка примера...", "", "→");
+        var slugs = _selected.Where(s => s != null).Select(s => s!.Slug).ToList();
+        foreach (var slug in slugs) { var st = GetState(slug); await EnsureInitAsync(slug); await SlugClearAsync(slug, st); }
+        foreach (var (key, val) in SamplePairs)
+            foreach (var slug in slugs)
+                await SlugAddAsync(slug, GetState(slug), key, val);
+        foreach (var slug in slugs) { await RefreshAsync(slug); AddLog(GetState(slug), $"→ Загружено {SamplePairs.Length} элементов", "log-op"); }
+        SetGlobalStatus($"Загружено {SamplePairs.Length} элементов", "status-ok", "✓");
+        _busy = false; StateHasChanged();
+    }
+
+    // ══ Dispatch ══════════════════════════════════════════════════════════════
+
+    private async Task<bool> SlugContainsAsync(string slug, StructureState st, string key) => slug switch
+    {
+        "open-hashing"       => await Dtr.ChainingContainsAsync(st.WasmHandle, key),
+        "linear-probing"     => await Dtr.LpContainsAsync(st.WasmHandle, key),
+        "quadratic-probing"  => await Dtr.QpContainsAsync(st.WasmHandle, key),
+        "double-hashing"     => DhContains(st, key),
+        "robin-hood-hashing" => RhContains(st, key),
+        "cuckoo-hashing"     => await Dtr.CuckooContainsAsync(st.WasmHandle, key),
+        "perfect-hashing"    => st.PhBuilt && st.WasmHandle >= 0 && await Dtr.PhContainsAsync(st.WasmHandle, key),
+        "avl-tree"           => await Dtr.AvlContainsAsync(st.WasmHandle, key),
+        "red-black-tree"     => RbtSearch(slug, _rbtRoots.GetValueOrDefault(slug), key) != null,
+        "skip-list"          => await Dtr.SlContainsAsync(st.WasmHandle, key),
+        "cartesian-tree"     => await Dtr.TreapContainsAsync(st.WasmHandle, key),
+        _                    => false
+    };
+
+    private async Task<bool> SlugAddAsync(string slug, StructureState st, string key, string val)
+    {
+        switch (slug)
+        {
+            case "open-hashing":       return await Dtr.ChainingAddAsync(st.WasmHandle, key, val);
+            case "linear-probing":     return await Dtr.LpAddAsync(st.WasmHandle, key, val);
+            case "quadratic-probing":  return await Dtr.QpAddAsync(st.WasmHandle, key, val);
+            case "double-hashing":     return DhAdd(st, key, val);
+            case "robin-hood-hashing": return RhAdd(st, key, val);
+            case "cuckoo-hashing":     return await Dtr.CuckooAddAsync(st.WasmHandle, key, val);
+            case "perfect-hashing":
+                if (st.PhItems!.Any(p => p.Key == key)) return false;
+                st.PhItems.Add(new DictItem(key, val));
+                await RebuildPhAsync(st); return true;
+            case "avl-tree":           return await Dtr.AvlAddAsync(st.WasmHandle, key, val);
+            case "red-black-tree":     return RbtInsertKey(slug, key, val);
+            case "skip-list":          return await Dtr.SlAddAsync(st.WasmHandle, key, val);
+            case "cartesian-tree":     return await Dtr.TreapAddAsync(st.WasmHandle, key, val);
+            default:                   return false;
         }
     }
 
-    private void Select(int slot, DataStructureInfo s)
+    private async Task SlugInsertOrAssignAsync(string slug, StructureState st, string key, string val)
     {
-        _selected[slot] = _selected[slot]?.Slug == s.Slug ? null : s;
+        switch (slug)
+        {
+            case "open-hashing":       await Dtr.ChainingInsertOrAssignAsync(st.WasmHandle, key, val); break;
+            case "linear-probing":     await Dtr.LpInsertOrAssignAsync(st.WasmHandle, key, val);       break;
+            case "quadratic-probing":  await Dtr.QpInsertOrAssignAsync(st.WasmHandle, key, val);       break;
+            case "double-hashing":     DhInsertOrAssign(st, key, val);                                  break;
+            case "robin-hood-hashing": RhInsertOrAssign(st, key, val);                                  break;
+            case "cuckoo-hashing":     await Dtr.CuckooInsertOrAssignAsync(st.WasmHandle, key, val);   break;
+            case "perfect-hashing":
+                var ex = st.PhItems!.FirstOrDefault(p => p.Key == key);
+                if (ex != null) st.PhItems.Remove(ex);
+                st.PhItems!.Add(new DictItem(key, val));
+                await RebuildPhAsync(st); break;
+            case "avl-tree":           await Dtr.AvlInsertOrAssignAsync(st.WasmHandle, key, val);    break;
+            case "red-black-tree":     RbtInsertOrAssign(slug, key, val);                             break;
+            case "skip-list":          await Dtr.SlInsertOrAssignAsync(st.WasmHandle, key, val);     break;
+            case "cartesian-tree":     await Dtr.TreapInsertOrAssignAsync(st.WasmHandle, key, val);  break;
+        }
     }
+
+    private async Task<bool> SlugRemoveAsync(string slug, StructureState st, string key)
+    {
+        switch (slug)
+        {
+            case "open-hashing":       return await Dtr.ChainingRemoveAsync(st.WasmHandle, key);
+            case "linear-probing":     return await Dtr.LpRemoveAsync(st.WasmHandle, key);
+            case "quadratic-probing":  return await Dtr.QpRemoveAsync(st.WasmHandle, key);
+            case "double-hashing":     return DhRemove(st, key);
+            case "robin-hood-hashing": return RhRemove(st, key);
+            case "cuckoo-hashing":     return await Dtr.CuckooRemoveAsync(st.WasmHandle, key);
+            case "perfect-hashing":
+                int idx = st.PhItems!.FindIndex(p => p.Key == key);
+                if (idx < 0) return false;
+                st.PhItems.RemoveAt(idx);
+                if (st.PhItems.Count > 0) await RebuildPhAsync(st); else { st.PhBuilt = false; st.WasmHandle = -1; }
+                return true;
+            case "avl-tree":           return await Dtr.AvlRemoveAsync(st.WasmHandle, key);
+            case "red-black-tree":     return RbtDelete(slug, key);
+            case "skip-list":          return await Dtr.SlRemoveAsync(st.WasmHandle, key);
+            case "cartesian-tree":     return await Dtr.TreapRemoveAsync(st.WasmHandle, key);
+            default:                   return false;
+        }
+    }
+
+    private async Task SlugClearAsync(string slug, StructureState st)
+    {
+        switch (slug)
+        {
+            case "open-hashing":       await Dtr.ChainingClearAsync(st.WasmHandle);   break;
+            case "linear-probing":     await Dtr.LpClearAsync(st.WasmHandle);         break;
+            case "quadratic-probing":  await Dtr.QpClearAsync(st.WasmHandle);         break;
+            case "double-hashing":     st.DhTable = NewDhTable(11);                   break;
+            case "robin-hood-hashing": st.RhTable = NewRhTable(11);                   break;
+            case "cuckoo-hashing":     await Dtr.CuckooClearAsync(st.WasmHandle);     break;
+            case "perfect-hashing":    st.PhItems = new(); st.PhBuilt = false; st.WasmHandle = -1; break;
+            case "avl-tree":           await Dtr.AvlClearAsync(st.WasmHandle);        break;
+            case "red-black-tree":
+                _rbtRoots[slug] = null; _rbtNils[slug] = new RbtNode { Color = RbColor.Black }; break;
+            case "skip-list":          await Dtr.SlClearAsync(st.WasmHandle); st.SlNodeLevels.Clear(); break;
+            case "cartesian-tree":     await Dtr.TreapClearAsync(st.WasmHandle);      break;
+        }
+    }
+
+    // ══ Perfect hash rebuild ══════════════════════════════════════════════════
+
+    private async Task RebuildPhAsync(StructureState st)
+    {
+        if (st.PhHandle >= 0) await Dtr.PhFreeAsync(st.PhHandle);
+        if (st.PhItems!.Count == 0) { st.PhBuilt = false; return; }
+        st.PhHandle   = await Dtr.PhCreateAsync(st.PhItems!);
+        st.WasmHandle = st.PhHandle;
+        st.PhBuilt    = st.PhHandle >= 0;
+    }
+
+    // ══ Refresh ═══════════════════════════════════════════════════════════════
+
+    private async Task RefreshAsync(string slug)
+    {
+        var st = GetState(slug);
+        switch (slug)
+        {
+            case "open-hashing":
+                st.ChainBuckets = await Dtr.ChainingSnapshotAsync(st.WasmHandle);
+                st.Count        = st.ChainBuckets.Sum(b => b.Chain.Count);
+                st.Capacity     = st.ChainBuckets.Count;
+                st.LoadFactor   = st.Capacity > 0 ? (double)st.Count / st.Capacity : 0;
+                break;
+
+            case "linear-probing":
+                st.LpSnap     = await Dtr.LpSnapshotAsync(st.WasmHandle);
+                st.Count      = st.LpSnap.Count;
+                st.Capacity   = st.LpSnap.Capacity;
+                st.LoadFactor = st.LpSnap.LoadFactor;
+                break;
+
+            case "quadratic-probing":
+                st.QpSnap     = await Dtr.QpSnapshotAsync(st.WasmHandle);
+                st.Count      = st.QpSnap.Count;
+                st.Capacity   = st.QpSnap.Capacity;
+                st.LoadFactor = st.QpSnap.LoadFactor;
+                break;
+
+            case "double-hashing":
+                st.Count      = st.DhTable!.Count(s => s.State == DhState.Occupied);
+                st.Capacity   = st.DhTable.Length;
+                st.LoadFactor = st.Capacity > 0 ? (double)st.Count / st.Capacity : 0;
+                break;
+
+            case "robin-hood-hashing":
+                st.Count      = st.RhTable!.Count(s => s.State == RhState.Occupied);
+                st.Capacity   = st.RhTable.Length;
+                st.LoadFactor = st.Capacity > 0 ? (double)st.Count / st.Capacity : 0;
+                break;
+
+            case "cuckoo-hashing":
+                var ckSnap    = await Dtr.CuckooSnapshotAsync(st.WasmHandle);
+                st.Count      = ckSnap.Count;
+                st.Capacity   = CkNextPow2(Math.Max(ckSnap.Count, 1) * 2, 8);
+                st.LoadFactor = ckSnap.LoadFactor;
+                CkRebuildTables(st, ckSnap);
+                break;
+
+            case "perfect-hashing":
+                if (st.PhBuilt && st.WasmHandle >= 0)
+                    { st.PhItems = await Dtr.PhSnapshotAsync(st.WasmHandle); st.Count = st.PhItems.Count; }
+                else st.Count = 0;
+                break;
+
+            case "avl-tree":
+                st.Count    = await Dtr.AvlCountAsync(st.WasmHandle);
+                st.Height   = await Dtr.AvlHeightAsync(st.WasmHandle);
+                var avlItems = await Dtr.AvlSnapshotAsync(st.WasmHandle);
+                st.TreeSvg  = RenderAvlSvg(avlItems, st.Height);
+                break;
+
+            case "red-black-tree":
+                st.Count      = RbtCount(slug);
+                st.Height     = RbtHeight(slug);
+                st.BlackHeight = RbtBlackHeight(slug);
+                st.TreeSvg    = RenderRbtSvg(slug);
+                break;
+
+            case "skip-list":
+                st.Count    = await Dtr.SlCountAsync(st.WasmHandle);
+                st.Height   = await Dtr.SlMaxLevelAsync(st.WasmHandle);
+                st.MaxLevel = st.Height;
+                st.SlItems  = await Dtr.SlSnapshotAsync(st.WasmHandle);
+                // Sync node levels
+                foreach (var item in st.SlItems)
+                    if (!st.SlNodeLevels.ContainsKey(item.Key))
+                        st.SlNodeLevels[item.Key] = SlGenLevel(st.MaxLevel);
+                var deadKeys = st.SlNodeLevels.Keys.Where(k => !st.SlItems.Any(i => i.Key == k)).ToList();
+                foreach (var k in deadKeys) st.SlNodeLevels.Remove(k);
+                st.SlSvg    = BuildSlSvg(st);
+                break;
+
+            case "cartesian-tree":
+                st.Count    = await Dtr.TreapCountAsync(st.WasmHandle);
+                st.Height   = await Dtr.TreapHeightAsync(st.WasmHandle);
+                var treapDto = await Dtr.TreapSnapshotAsync(st.WasmHandle);
+                st.TreeSvg  = RenderTreapSvg(treapDto);
+                break;
+        }
+    }
+
+    // ══ Double Hashing (C# simulation — mirrors DoubleHashingDemo) ════════════
+
+    private static DhSlot[] NewDhTable(int cap)
+        => Enumerable.Range(0, cap).Select(_ => new DhSlot()).ToArray();
+
+    private static int DhH1(string key, int cap)
+    { uint h = 5381; foreach (char c in key) h = ((h << 5) + h) ^ (uint)c; return (int)(h % (uint)cap); }
+
+    private static int DhH2(string key, int cap)
+    {
+        uint h = 0; foreach (char c in key) h = (uint)c + (h << 6) + (h << 16) - h;
+        int step = 1 + (int)(h % (uint)(cap - 1));
+        if (step % 2 == 0) step++; if (step >= cap) step = cap - 2; if (step < 1) step = 1;
+        return step;
+    }
+
+    private bool DhContains(StructureState st, string key)
+    { var t = st.DhTable!; int cap = t.Length, h1 = DhH1(key, cap), h2 = DhH2(key, cap);
+      for (int i = 0; i < cap; i++) { int si = (h1 + i * h2) % cap; if (t[si].State == DhState.Empty) return false; if (t[si].State == DhState.Occupied && t[si].Key == key) return true; } return false; }
+
+    private bool DhAdd(StructureState st, string key, string val)
+    { DhResize(st); var t = st.DhTable!; int cap = t.Length, h1 = DhH1(key, cap), h2 = DhH2(key, cap), tomb = -1;
+      for (int i = 0; i < cap; i++) { int si = (h1 + i * h2) % cap;
+        if (t[si].State == DhState.Empty) { int at = tomb >= 0 ? tomb : si; t[at] = new DhSlot { State = DhState.Occupied, Key = key, Value = val, HomeSlot = h1 }; return true; }
+        if (t[si].State == DhState.Deleted && tomb < 0) tomb = si;
+        if (t[si].State == DhState.Occupied && t[si].Key == key) return false; }
+      if (tomb >= 0) { t[tomb] = new DhSlot { State = DhState.Occupied, Key = key, Value = val, HomeSlot = h1 }; return true; } return false; }
+
+    private void DhInsertOrAssign(StructureState st, string key, string val)
+    { var t = st.DhTable!; int cap = t.Length, h1 = DhH1(key, cap), h2 = DhH2(key, cap);
+      for (int i = 0; i < cap; i++) { int si = (h1 + i * h2) % cap; if (t[si].State == DhState.Occupied && t[si].Key == key) { t[si].Value = val; return; } }
+      DhAdd(st, key, val); }
+
+    private bool DhRemove(StructureState st, string key)
+    { var t = st.DhTable!; int cap = t.Length, h1 = DhH1(key, cap), h2 = DhH2(key, cap);
+      for (int i = 0; i < cap; i++) { int si = (h1 + i * h2) % cap; if (t[si].State == DhState.Empty) return false; if (t[si].State == DhState.Occupied && t[si].Key == key) { t[si] = new DhSlot { State = DhState.Deleted }; return true; } } return false; }
+
+    private void DhResize(StructureState st)
+    { double lf = st.DhTable!.Count(s => s.State == DhState.Occupied) / (double)st.DhTable.Length;
+      if (lf < 0.65) return; int nc = NextPrime(st.DhTable.Length * 2 + 1); var old = st.DhTable; st.DhTable = NewDhTable(nc);
+      foreach (var s in old.Where(s => s.State == DhState.Occupied)) DhAdd(st, s.Key, s.Value); }
+
+    // ══ Robin Hood (C# simulation — mirrors RobinHoodDemo) ════════════════════
+
+    private static RhSlot[] NewRhTable(int cap)
+        => Enumerable.Range(0, cap).Select(_ => new RhSlot()).ToArray();
+
+    private static int RhHash(string key, int cap)
+    { uint h = 5381; foreach (char c in key) h = ((h << 5) + h) ^ (uint)c; return (int)(h % (uint)cap); }
+
+    private bool RhContains(StructureState st, string key)
+    { var t = st.RhTable!; int cap = t.Length, home = RhHash(key, cap);
+      for (int i = 0; i < cap; i++) { int si = (home + i) % cap; if (t[si].State == RhState.Empty) return false; if (t[si].Psl < i) return false; if (t[si].State == RhState.Occupied && t[si].Key == key) return true; } return false; }
+
+    private bool RhAdd(StructureState st, string key, string val)
+    { RhResize(st); var t = st.RhTable!; int cap = t.Length, home = RhHash(key, cap);
+      var ins = new RhSlot { State = RhState.Occupied, Key = key, Value = val, HomeSlot = home, Psl = 0 };
+      for (int i = 0; i < cap; i++) { int si = (home + i) % cap;
+        if (t[si].State == RhState.Empty) { t[si] = ins; return true; }
+        if (t[si].State == RhState.Occupied && t[si].Key == ins.Key) return false;
+        if (ins.Psl > t[si].Psl) { var d = t[si]; t[si] = ins; ins = d; home = RhHash(ins.Key, cap); }
+        ins.Psl++; } return false; }
+
+    private void RhInsertOrAssign(StructureState st, string key, string val)
+    { var t = st.RhTable!; int cap = t.Length, home = RhHash(key, cap);
+      for (int i = 0; i < cap; i++) { int si = (home + i) % cap; if (t[si].State == RhState.Occupied && t[si].Key == key) { t[si].Value = val; return; } }
+      RhAdd(st, key, val); }
+
+    private bool RhRemove(StructureState st, string key)
+    { var t = st.RhTable!; int cap = t.Length, home = RhHash(key, cap);
+      for (int i = 0; i < cap; i++) { int si = (home + i) % cap;
+        if (t[si].State == RhState.Empty) return false; if (t[si].Psl < i) return false;
+        if (t[si].State == RhState.Occupied && t[si].Key == key)
+        { int cur = si; while (true) { int nx = (cur + 1) % cap; if (t[nx].State == RhState.Empty || t[nx].Psl == 0) { t[cur] = new RhSlot(); break; }
+          t[cur] = new RhSlot { State = RhState.Occupied, Key = t[nx].Key, Value = t[nx].Value, HomeSlot = t[nx].HomeSlot, Psl = t[nx].Psl - 1 }; cur = nx; }
+          return true; } } return false; }
+
+    private void RhResize(StructureState st)
+    { double lf = st.RhTable!.Count(s => s.State == RhState.Occupied) / (double)st.RhTable.Length;
+      if (lf < 0.7) return; int nc = NextPrime(st.RhTable.Length * 2 + 1); var old = st.RhTable; st.RhTable = NewRhTable(nc);
+      foreach (var s in old.Where(s => s.State == RhState.Occupied)) RhAdd(st, s.Key, s.Value); }
+
+    // ══ Cuckoo T1/T2 rebuild (mirrors CuckooDemo.RebuildTables) ══════════════
+
+    private static int CkH1(string key, int cap)
+    { uint h = 2166136261u; foreach (char c in key) { h ^= c; h *= 16777619u; } return (int)(h % (uint)cap); }
+    private static int CkH2(string key, int cap)
+    { uint h = 2166136261u ^ 0x5bd1e995u; foreach (char c in key) { h ^= c; h *= 16777619u; h += 0x27d4eb2du; } return (int)(h % (uint)cap); }
+    private static int CkNextPow2(int n, int min = 1) { int p = min; while (p < n) p <<= 1; return p; }
+
+    private static void CkRebuildTables(StructureState st, CuckooSnapshot snap)
+    {
+        int cap = CkNextPow2(Math.Max(snap.Count, 1) * 2, 8);
+        st.CkT1 = Enumerable.Range(0, cap).Select(i => new CkSlotForViz { Idx = i }).ToList();
+        st.CkT2 = Enumerable.Range(0, cap).Select(i => new CkSlotForViz { Idx = i }).ToList();
+        foreach (var e in snap.Entries)
+        {
+            if (e.State != CuckooSlotState.Occupied) continue;
+            int s1 = CkH1(e.Key, cap), s2 = CkH2(e.Key, cap);
+            if (!st.CkT1[s1].Occupied) { st.CkT1[s1].Key = e.Key; st.CkT1[s1].Value = e.Value; }
+            else if (!st.CkT2[s2].Occupied) { st.CkT2[s2].Key = e.Key; st.CkT2[s2].Value = e.Value; }
+            else
+            {
+                bool placed = false;
+                for (int i = 0; i < cap && !placed; i++) if (!st.CkT1[i].Occupied) { st.CkT1[i].Key = e.Key; st.CkT1[i].Value = e.Value; placed = true; }
+                if (!placed) for (int i = 0; i < cap && !placed; i++) if (!st.CkT2[i].Occupied) { st.CkT2[i].Key = e.Key; st.CkT2[i].Value = e.Value; placed = true; }
+            }
+        }
+    }
+
+    // ══ Red-Black Tree (C# — mirrors RbtDemo exactly) ════════════════════════
+
+    private bool RbtIsNil(string slug, RbtNode? n) => n == null || n == GetNil(slug);
+
+    private RbtNode? RbtSearch(string slug, RbtNode? node, string key)
+    { if (RbtIsNil(slug, node)) return null; int c = string.Compare(key, node!.Key, StringComparison.Ordinal); return c == 0 ? node : RbtSearch(slug, c < 0 ? node.Left : node.Right, key); }
+
+    private bool RbtInsertKey(string slug, string key, string val)
+    {
+        var nil = GetNil(slug); if (!_rbtRoots.ContainsKey(slug)) _rbtRoots[slug] = null;
+        if (RbtSearch(slug, _rbtRoots[slug], key) != null) return false;
+        var z = new RbtNode { Key = key, Value = val, Color = RbColor.Red, Left = nil, Right = nil, Parent = nil };
+        RbtNode? y = nil; var x = _rbtRoots[slug] ?? nil;
+        while (!RbtIsNil(slug, x)) { y = x; x = string.Compare(key, x!.Key, StringComparison.Ordinal) < 0 ? x.Left! : x.Right!; }
+        z.Parent = y;
+        if (RbtIsNil(slug, y)) _rbtRoots[slug] = z;
+        else if (string.Compare(key, y!.Key, StringComparison.Ordinal) < 0) y.Left = z; else y.Right = z;
+        RbtInsertFixup(slug, z); return true;
+    }
+
+    private void RbtInsertOrAssign(string slug, string key, string val)
+    { var n = RbtSearch(slug, _rbtRoots.GetValueOrDefault(slug), key); if (n != null) { n.Value = val; return; } RbtInsertKey(slug, key, val); }
+
+    private bool RbtDelete(string slug, string key)
+    {
+        var z = RbtSearch(slug, _rbtRoots.GetValueOrDefault(slug), key);
+        if (z == null || RbtIsNil(slug, z)) return false;
+        var nil = GetNil(slug); var y = z; var yOrig = y.Color; RbtNode x;
+        if (RbtIsNil(slug, z.Left!)) { x = z.Right!; RbtTransplant(slug, z, z.Right!); }
+        else if (RbtIsNil(slug, z.Right!)) { x = z.Left!; RbtTransplant(slug, z, z.Left!); }
+        else { y = RbtMin(slug, z.Right!); yOrig = y.Color; x = y.Right!;
+               if (y.Parent == z) x.Parent = y;
+               else { RbtTransplant(slug, y, y.Right!); y.Right = z.Right; y.Right!.Parent = y; }
+               RbtTransplant(slug, z, y); y.Left = z.Left; y.Left!.Parent = y; y.Color = z.Color; }
+        if (yOrig == RbColor.Black) RbtDelFixup(slug, x);
+        return true;
+    }
+
+    private void RbtTransplant(string slug, RbtNode u, RbtNode v)
+    { var nil = GetNil(slug); if (u.Parent == nil || u.Parent == null) _rbtRoots[slug] = v; else if (u == u.Parent!.Left) u.Parent.Left = v; else u.Parent.Right = v; v.Parent = u.Parent!; }
+    private RbtNode RbtMin(string slug, RbtNode n) { while (!RbtIsNil(slug, n.Left!)) n = n.Left!; return n; }
+    private int RbtCount(string slug) { int c = 0; void W(RbtNode? n) { if (RbtIsNil(slug, n)) return; c++; W(n!.Left); W(n.Right); } W(_rbtRoots.GetValueOrDefault(slug)); return c; }
+    private int RbtHeight(string slug) { int H(RbtNode? n) => RbtIsNil(slug, n) ? 0 : 1 + Math.Max(H(n!.Left), H(n.Right)); return H(_rbtRoots.GetValueOrDefault(slug)); }
+    private int RbtBlackHeight(string slug) { int B(RbtNode? n) => RbtIsNil(slug, n) ? 1 : B(n!.Left) + (n.Color == RbColor.Black ? 1 : 0); return Math.Max(0, B(_rbtRoots.GetValueOrDefault(slug)) - 1); }
+
+    private void RbtLeftRotate(string slug, RbtNode x) { var nil = GetNil(slug); var y = x.Right!; x.Right = y.Left; if (!RbtIsNil(slug, y.Left)) y.Left!.Parent = x; y.Parent = x.Parent; if (x.Parent == nil || x.Parent == null) _rbtRoots[slug] = y; else if (x == x.Parent!.Left) x.Parent.Left = y; else x.Parent.Right = y; y.Left = x; x.Parent = y; }
+    private void RbtRightRotate(string slug, RbtNode y) { var nil = GetNil(slug); var x = y.Left!; y.Left = x.Right; if (!RbtIsNil(slug, x.Right)) x.Right!.Parent = y; x.Parent = y.Parent; if (y.Parent == nil || y.Parent == null) _rbtRoots[slug] = x; else if (y == y.Parent!.Left) y.Parent.Left = x; else y.Parent.Right = x; x.Right = y; y.Parent = x; }
+
+    private void RbtInsertFixup(string slug, RbtNode z)
+    { while (z.Parent?.Color == RbColor.Red)
+      { if (z.Parent == z.Parent?.Parent?.Left) { var y = z.Parent.Parent!.Right!; if (y.Color == RbColor.Red) { z.Parent.Color = RbColor.Black; y.Color = RbColor.Black; z.Parent.Parent!.Color = RbColor.Red; z = z.Parent.Parent!; } else { if (z == z.Parent.Right) { z = z.Parent; RbtLeftRotate(slug, z); } z.Parent!.Color = RbColor.Black; z.Parent.Parent!.Color = RbColor.Red; RbtRightRotate(slug, z.Parent.Parent!); } } else { var y = z.Parent!.Parent!.Left!; if (y.Color == RbColor.Red) { z.Parent.Color = RbColor.Black; y.Color = RbColor.Black; z.Parent.Parent!.Color = RbColor.Red; z = z.Parent.Parent!; } else { if (z == z.Parent.Left) { z = z.Parent; RbtRightRotate(slug, z); } z.Parent!.Color = RbColor.Black; z.Parent.Parent!.Color = RbColor.Red; RbtLeftRotate(slug, z.Parent.Parent!); } } if (z == _rbtRoots.GetValueOrDefault(slug)) break; }
+      if (_rbtRoots.TryGetValue(slug, out var r) && r != null) r.Color = RbColor.Black; }
+
+    private void RbtDelFixup(string slug, RbtNode x)
+    { while (x != _rbtRoots.GetValueOrDefault(slug) && x.Color == RbColor.Black)
+      { if (x == x.Parent!.Left) { var w = x.Parent.Right!; if (w.Color == RbColor.Red) { w.Color = RbColor.Black; x.Parent.Color = RbColor.Red; RbtLeftRotate(slug, x.Parent); w = x.Parent.Right!; } if (w.Left!.Color == RbColor.Black && w.Right!.Color == RbColor.Black) { w.Color = RbColor.Red; x = x.Parent; } else { if (w.Right!.Color == RbColor.Black) { w.Left!.Color = RbColor.Black; w.Color = RbColor.Red; RbtRightRotate(slug, w); w = x.Parent!.Right!; } w.Color = x.Parent!.Color; x.Parent.Color = RbColor.Black; w.Right!.Color = RbColor.Black; RbtLeftRotate(slug, x.Parent); x = _rbtRoots[slug]!; } } else { var w = x.Parent!.Left!; if (w.Color == RbColor.Red) { w.Color = RbColor.Black; x.Parent.Color = RbColor.Red; RbtRightRotate(slug, x.Parent); w = x.Parent.Left!; } if (w.Right!.Color == RbColor.Black && w.Left!.Color == RbColor.Black) { w.Color = RbColor.Red; x = x.Parent; } else { if (w.Left!.Color == RbColor.Black) { w.Right!.Color = RbColor.Black; w.Color = RbColor.Red; RbtLeftRotate(slug, w); w = x.Parent!.Left!; } w.Color = x.Parent!.Color; x.Parent.Color = RbColor.Black; w.Left!.Color = RbColor.Black; RbtRightRotate(slug, x.Parent); x = _rbtRoots[slug]!; } } }
+      x.Color = RbColor.Black; }
+
+    // ══ RBT SVG (mirrors RbtDemo layout: AssignPositions + CollectNilNodes) ════
+
+    private const double RbtXSp  = 130;
+    private const double RbtYSp  = 82;
+    private const double RbtXPad = 65;
+    private const double RbtYPad = 46;
+    private const double RbtNW   = 120;
+    private const double RbtNH   = 42;
+
+    private record RbtVisNode(string Key, string Value, RbColor Color, double X, double Y);
+    private record RbtEdge(double X1, double Y1, double X2, double Y2);
+    private record RbtNilNode(double X, double Y);
+
+    private string RenderRbtSvg(string slug)
+    {
+        var root = _rbtRoots.GetValueOrDefault(slug);
+        if (RbtIsNil(slug, root))
+            return "<div style='padding:16px;color:var(--text-3);font-family:var(--font-ui);font-size:11px;font-style:italic;'>Дерево пустое</div>";
+
+        var visNodes = new List<RbtVisNode>();
+        var edges    = new List<RbtEdge>();
+        var nilNodes = new List<RbtNilNode>();
+        var nilEdges = new List<RbtEdge>();
+
+        int rank = 0;
+        void AssignPos(RbtNode? n, int depth)
+        { if (RbtIsNil(slug, n)) return; AssignPos(n!.Left, depth + 1); double x = RbtXPad + rank * RbtXSp, y = RbtYPad + depth * RbtYSp; visNodes.Add(new RbtVisNode(n.Key, n.Value, n.Color, x, y)); rank++; AssignPos(n.Right, depth + 1); }
+        AssignPos(root, 0);
+
+        void CollEdges(RbtNode? n)
+        { if (RbtIsNil(slug, n)) return; var nv = visNodes.FirstOrDefault(v => v.Key == n!.Key); if (nv == null) return;
+          if (!RbtIsNil(slug, n!.Left))  { var l = visNodes.FirstOrDefault(v => v.Key == n.Left!.Key);  if (l != null) edges.Add(new(nv.X, nv.Y, l.X, l.Y)); CollEdges(n.Left); }
+          if (!RbtIsNil(slug, n.Right)) { var r = visNodes.FirstOrDefault(v => v.Key == n.Right!.Key); if (r != null) edges.Add(new(nv.X, nv.Y, r.X, r.Y)); CollEdges(n.Right); } }
+        CollEdges(root);
+
+        void CollNils(RbtNode? n)
+        { if (RbtIsNil(slug, n)) return; var nv = visNodes.FirstOrDefault(v => v.Key == n!.Key); if (nv == null) return;
+          if (RbtIsNil(slug, n!.Left))  { double nx = nv.X - 32, ny = nv.Y + RbtYSp; nilNodes.Add(new(nx, ny)); nilEdges.Add(new(nv.X, nv.Y, nx, ny)); } else CollNils(n.Left);
+          if (RbtIsNil(slug, n.Right)) { double nx = nv.X + 32, ny = nv.Y + RbtYSp; nilNodes.Add(new(nx, ny)); nilEdges.Add(new(nv.X, nv.Y, nx, ny)); } else CollNils(n.Right); }
+        CollNils(root);
+
+        int count = visNodes.Count;
+        double svgW = count * RbtXSp;
+        double svgH = RbtYPad * 2 + (RbtHeight(slug) + 1) * RbtYSp + 20;
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"<div class='cmp-tree-wrap'><div style='overflow-x:auto'><svg viewBox='0 0 {F(svgW)} {F(svgH)}' width='{F(svgW)}' height='{F(svgH)}' xmlns='http://www.w3.org/2000/svg' style='display:block'>");
+        sb.Append($"<rect x='0' y='0' width='{F(svgW)}' height='{F(svgH)}' fill='#ffffff'/>");
+
+        // Legend
+        sb.Append($"<rect x='4' y='4' width='14' height='8' rx='1' fill='#e8edf5' stroke='#445566' stroke-width='1'/>");
+        sb.Append($"<text x='21' y='12' font-family='monospace' font-size='9' fill='#445566'>Чёрный</text>");
+        sb.Append($"<rect x='70' y='4' width='14' height='8' rx='1' fill='#fde8e8' stroke='#cc3333' stroke-width='1'/>");
+        sb.Append($"<text x='87' y='12' font-family='monospace' font-size='9' fill='#cc3333'>Красный</text>");
+        sb.Append($"<rect x='144' y='4' width='14' height='8' rx='1' fill='#e8edf5' stroke='#445566' stroke-width='1'/>");
+        sb.Append($"<text x='161' y='12' font-family='monospace' font-size='9' fill='#445566'>NIL</text>");
+
+        // Edges
+        foreach (var e in edges) sb.Append($"<line x1='{F(e.X1)}' y1='{F(e.Y1)}' x2='{F(e.X2)}' y2='{F(e.Y2)}' stroke='#9aafcc' stroke-width='1.5'/>");
+        // NIL edges
+        foreach (var e in nilEdges) sb.Append($"<line x1='{F(e.X1)}' y1='{F(e.Y1)}' x2='{F(e.X2)}' y2='{F(e.Y2)}' stroke='#8899aa' stroke-width='1' stroke-dasharray='4,3'/>");
+        // NIL nodes
+        foreach (var nil in nilNodes)
+        { double nw = 56, nh = 30, rx = nil.X - nw / 2, ry = nil.Y - nh / 2;
+          sb.Append($"<rect x='{F(rx)}' y='{F(ry)}' width='{F(nw)}' height='{F(nh)}' rx='3' fill='#e8edf5' stroke='#445566' stroke-width='1'/>");
+          sb.Append($"<text x='{F(nil.X)}' y='{F(nil.Y + 5)}' text-anchor='middle' font-family='monospace' font-size='11' font-weight='bold' fill='#445566'>NIL</text>"); }
+        // Nodes
+        foreach (var n in visNodes)
+        { double rx = n.X - RbtNW / 2, ry = n.Y - RbtNH / 2;
+          string fill   = n.Color == RbColor.Red ? "#fde8e8" : "#e8edf5";
+          string stroke = n.Color == RbColor.Red ? "#cc3333" : "#445566";
+          string sw     = n.Color == RbColor.Red ? "1.5" : "1";
+          string tf     = n.Color == RbColor.Red ? "#5c1010" : "#1a2533";
+          string vf     = n.Color == RbColor.Red ? "#8b1919" : "#445566";
+          sb.Append($"<rect x='{F(rx)}' y='{F(ry)}' width='{F(RbtNW)}' height='{F(RbtNH)}' rx='3' fill='{fill}' stroke='{stroke}' stroke-width='{sw}'/>");
+          sb.Append($"<text x='{F(n.X)}' y='{F(n.Y - 6)}' text-anchor='middle' font-family='monospace' font-size='11' font-weight='bold' fill='{tf}'>{Enc(Trunc(n.Key, 14))}</text>");
+          sb.Append($"<line x1='{F(rx + 5)}' y1='{F(n.Y + 1)}' x2='{F(rx + RbtNW - 5)}' y2='{F(n.Y + 1)}' stroke='#cccccc' stroke-width='0.5'/>");
+          sb.Append($"<text x='{F(n.X)}' y='{F(n.Y + 13)}' text-anchor='middle' font-family='monospace' font-size='10' fill='{vf}'>{Enc(Trunc(n.Value, 14))}</text>"); }
+        sb.Append("</svg></div></div>");
+        return sb.ToString();
+    }
+
+    // ══ AVL SVG (mirrors AvlTreeDemo: BuildTree from inorder + AssignPositions) ═
+
+    private const double AvlXSp  = 130;
+    private const double AvlYSp  = 82;
+    private const double AvlXPad = 65;
+    private const double AvlYPad = 46;
+    private const double AvlNW   = 120;
+    private const double AvlNH   = 42;
+
+    private class AvlNode { public string Key="",Value=""; public double X,Y; public int Depth; public AvlNode? Left,Right; }
+
+    private static AvlNode? AvlBuildTree(List<DictItem> sorted, int lo, int hi, int depth)
+    { if (lo > hi) return null; int mid = (lo + hi) / 2; return new AvlNode { Key = sorted[mid].Key, Value = sorted[mid].Value, Depth = depth, Left = AvlBuildTree(sorted, lo, mid - 1, depth + 1), Right = AvlBuildTree(sorted, mid + 1, hi, depth + 1) }; }
+
+    private static void AvlAssignPos(AvlNode? n, ref int rank)
+    { if (n == null) return; AvlAssignPos(n.Left, ref rank); n.X = AvlXPad + rank * AvlXSp; n.Y = AvlYPad + n.Depth * AvlYSp; rank++; AvlAssignPos(n.Right, ref rank); }
+
+    private string RenderAvlSvg(List<DictItem> items, int height)
+    {
+        if (items.Count == 0) return "<div style='padding:16px;color:var(--text-3);font-family:var(--font-ui);font-size:11px;font-style:italic;'>Дерево пустое</div>";
+        var root = AvlBuildTree(items, 0, items.Count - 1, 0);
+        int rank = 0; AvlAssignPos(root, ref rank);
+
+        var allNodes = new List<AvlNode>();
+        void Collect(AvlNode? n) { if (n == null) return; allNodes.Add(n); Collect(n.Left); Collect(n.Right); }
+        Collect(root);
+
+        double svgW = items.Count > 0 ? items.Count * AvlXSp : 200;
+        double svgH = AvlYPad * 2 + height * AvlYSp + AvlNH;
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"<div class='cmp-tree-wrap'><div style='overflow-x:auto'><svg viewBox='0 0 {F(svgW)} {F(svgH)}' width='{F(svgW)}' height='{F(svgH)}' xmlns='http://www.w3.org/2000/svg' style='display:block'>");
+        sb.Append($"<rect x='0' y='0' width='{F(svgW)}' height='{F(svgH)}' fill='#ffffff'/>");
+
+        void DrawEdges(AvlNode? n)
+        { if (n == null) return; if (n.Left  != null) sb.Append($"<line x1='{F(n.X)}' y1='{F(n.Y)}' x2='{F(n.Left.X)}'  y2='{F(n.Left.Y)}'  stroke='#9aafcc' stroke-width='1.5'/>"); if (n.Right != null) sb.Append($"<line x1='{F(n.X)}' y1='{F(n.Y)}' x2='{F(n.Right.X)}' y2='{F(n.Right.Y)}' stroke='#9aafcc' stroke-width='1.5'/>"); DrawEdges(n.Left); DrawEdges(n.Right); }
+        DrawEdges(root);
+
+        foreach (var n in allNodes)
+        { double rx = n.X - AvlNW / 2, ry = n.Y - AvlNH / 2;
+          sb.Append($"<rect x='{F(rx)}' y='{F(ry)}' width='{F(AvlNW)}' height='{F(AvlNH)}' rx='3' fill='#eef2f7' stroke='#8899aa' stroke-width='1'/>");
+          sb.Append($"<text x='{F(n.X)}' y='{F(n.Y - 6)}' text-anchor='middle' font-family='monospace' font-size='11' font-weight='bold' fill='#1a2533'>{Enc(Trunc(n.Key, 14))}</text>");
+          sb.Append($"<line x1='{F(rx + 5)}' y1='{F(n.Y + 1)}' x2='{F(rx + AvlNW - 5)}' y2='{F(n.Y + 1)}' stroke='#cccccc' stroke-width='0.5'/>");
+          sb.Append($"<text x='{F(n.X)}' y='{F(n.Y + 13)}' text-anchor='middle' font-family='monospace' font-size='10' fill='#445566'>{Enc(Trunc(n.Value, 14))}</text>"); }
+        sb.Append("</svg></div></div>");
+        return sb.ToString();
+    }
+
+    // ══ Treap SVG (tree layout from TreapNodeDto, showing actual priorities) ════
+
+    private class TreapVizNode { public string Key="",Value=""; public long Priority; public double X,Y; public int Depth; public TreapVizNode? Left,Right; }
+
+    private static TreapVizNode? TreapFromDto(TreapNodeDto? dto, int depth = 0)
+    { if (dto == null) return null; return new TreapVizNode { Key = dto.Key, Value = dto.Value, Priority = dto.Priority, Depth = depth, Left = TreapFromDto(dto.Left, depth + 1), Right = TreapFromDto(dto.Right, depth + 1) }; }
+
+    private static void TreapAssignPos(TreapVizNode? n, ref int rank)
+    { if (n == null) return; TreapAssignPos(n.Left, ref rank); n.X = AvlXPad + rank * AvlXSp; n.Y = AvlYPad + n.Depth * AvlYSp; rank++; TreapAssignPos(n.Right, ref rank); }
+
+    private string RenderTreapSvg(TreapNodeDto? dto)
+    {
+        if (dto == null) return "<div style='padding:16px;color:var(--text-3);font-family:var(--font-ui);font-size:11px;font-style:italic;'>Дерево пустое</div>";
+        var root = TreapFromDto(dto);
+        int rank = 0; TreapAssignPos(root, ref rank);
+
+        var all = new List<TreapVizNode>();
+        void Collect(TreapVizNode? n) { if (n == null) return; all.Add(n); Collect(n.Left); Collect(n.Right); }
+        Collect(root);
+
+        int maxDepth = all.Max(n => n.Depth);
+        double svgW = all.Count > 0 ? all.Max(n => n.X) + AvlXPad + AvlNW / 2 + 10 : 200;
+        double svgH = AvlYPad * 2 + maxDepth * AvlYSp + AvlNH;
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"<div class='cmp-tree-wrap'><div style='overflow-x:auto'><svg viewBox='0 0 {F(svgW)} {F(svgH)}' width='{F(svgW)}' height='{F(svgH)}' xmlns='http://www.w3.org/2000/svg' style='display:block'>");
+        sb.Append($"<rect x='0' y='0' width='{F(svgW)}' height='{F(svgH)}' fill='#ffffff'/>");
+
+        void DrawEdges(TreapVizNode? n)
+        { if (n == null) return; if (n.Left  != null) sb.Append($"<line x1='{F(n.X)}' y1='{F(n.Y)}' x2='{F(n.Left.X)}'  y2='{F(n.Left.Y)}'  stroke='#9aafcc' stroke-width='1.5'/>"); if (n.Right != null) sb.Append($"<line x1='{F(n.X)}' y1='{F(n.Y)}' x2='{F(n.Right.X)}' y2='{F(n.Right.Y)}' stroke='#9aafcc' stroke-width='1.5'/>"); DrawEdges(n.Left); DrawEdges(n.Right); }
+        DrawEdges(root);
+
+        foreach (var n in all)
+        { double rx = n.X - AvlNW / 2, ry = n.Y - AvlNH / 2;
+          sb.Append($"<rect x='{F(rx)}' y='{F(ry)}' width='{F(AvlNW)}' height='{F(AvlNH)}' rx='3' fill='#f5f5ef' stroke='#8899aa' stroke-width='1'/>");
+          sb.Append($"<text x='{F(n.X)}' y='{F(n.Y - 6)}' text-anchor='middle' font-family='monospace' font-size='11' font-weight='bold' fill='#111111'>{Enc(Trunc(n.Key, 14))}</text>");
+          sb.Append($"<line x1='{F(rx + 5)}' y1='{F(n.Y + 1)}' x2='{F(rx + AvlNW - 5)}' y2='{F(n.Y + 1)}' stroke='#cccccc' stroke-width='0.5'/>");
+          sb.Append($"<text x='{F(n.X)}' y='{F(n.Y + 13)}' text-anchor='middle' font-family='monospace' font-size='10' fill='#886600'>p={n.Priority}</text>"); }
+        sb.Append("</svg></div></div>");
+        return sb.ToString();
+    }
+
+    // ══ Skip List SVG (mirrors SkipListDemo.BuildSvg exactly) ════════════════
+
+    private const double SlHeaderX   = 40;
+    private const double SlSentinelW = 34;
+    private const double SlNodeW     = 94;
+    private const double SlNodeH     = 40;
+    private const double SlLaneGap   = 10;
+    private const double SlNodeGap   = 16;
+    private const double SlTailPad   = 86;
+    private const double SlLabelX    = 24;
+    private const int    SlMaxLevels = 8;
+    private static readonly Random SlRng = new();
+
+    private static int SlGenLevel(int maxLevel) { int lv = 1; while (SlRng.NextDouble() < 0.5 && lv < Math.Max(maxLevel, SlMaxLevels)) lv++; return lv; }
+    private static double SlLevelY(int lv, double svgH) => svgH - SlNodeH - lv * (SlNodeH + SlLaneGap);
+
+    private static string SlF(double d) => d.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+    private static string SlT(double x, double y, string text, int size = 12, string fill = "#dde4ee", string anchor = "middle", string weight = "normal")
+    { var esc = System.Net.WebUtility.HtmlEncode(text); return $"<text x=\"{SlF(x)}\" y=\"{SlF(y)}\" font-size=\"{size}\" fill=\"{fill}\" text-anchor=\"{anchor}\" font-family=\"monospace\" font-weight=\"{weight}\">{esc}</text>"; }
+
+    private string BuildSlSvg(StructureState st)
+    {
+        var items = st.SlItems ?? new();
+        if (items.Count == 0) return "<div style='padding:12px;color:var(--text-3);font-family:var(--font-ui);font-size:11px;font-style:italic;'>Список пуст</div>";
+
+        var sorted = items.OrderBy(i => i.Key, StringComparer.Ordinal).ToList();
+        int n = sorted.Count;
+
+        // Compute visLevels from stored node levels
+        int visLevels = n > 0 ? Math.Max(1, sorted.Max(i => st.SlNodeLevels.TryGetValue(i.Key, out var h) ? h : 1)) : 1;
+        visLevels = Math.Min(visLevels, SlMaxLevels);
+        if (st.MaxLevel > 0) visLevels = Math.Max(visLevels, Math.Min(st.MaxLevel, SlMaxLevels));
+
+        double startX = SlHeaderX + SlSentinelW + SlNodeGap;
+        double svgW   = startX + n * (SlNodeW + SlNodeGap) + SlTailPad + SlSentinelW + 10;
+        double svgH   = visLevels * (SlNodeH + SlLaneGap) + 50;
+
+        double sentinelTotalH = visLevels * SlNodeH + (visLevels - 1) * SlLaneGap;
+        double sentinelY      = SlLevelY(visLevels - 1, svgH);
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"<div class='cmp-sl-wrap'><svg viewBox=\"0 0 {SlF(svgW)} {SlF(svgH)}\" style=\"width:100%;min-width:{Math.Max(400,(int)svgW)}px;height:auto;display:block;overflow:visible;\" xmlns=\"http://www.w3.org/2000/svg\">");
+        sb.Append("<defs>");
+        sb.Append("<marker id=\"sl-arrow\"     markerWidth=\"7\" markerHeight=\"7\" refX=\"6\" refY=\"3.5\" orient=\"auto\"><polygon points=\"0 0,7 3.5,0 7\" fill=\"#8899aa\" opacity=\"0.7\"/></marker>");
+        sb.Append("<marker id=\"sl-arrow-exp\" markerWidth=\"8\" markerHeight=\"8\" refX=\"7\" refY=\"4\"   orient=\"auto\"><polygon points=\"0 0,8 4,0 8\" fill=\"#339966\" opacity=\"0.8\"/></marker>");
+        sb.Append("</defs>");
+        sb.Append($"<rect x=\"0\" y=\"0\" width=\"{SlF(svgW)}\" height=\"{SlF(svgH)}\" fill=\"#ffffff\"/>");
+
+        // Level labels
+        for (int lv = visLevels - 1; lv >= 0; lv--)
+        { double cy = SlLevelY(lv, svgH) + SlNodeH / 2.0 + 5; sb.Append(SlT(SlLabelX, cy, $"L{lv}", 11, "#8899aa")); }
+
+        // Lane dashes
+        for (int lv = visLevels - 1; lv >= 0; lv--)
+        { double ly = SlLevelY(lv, svgH) + SlNodeH / 2.0; sb.Append($"<line x1=\"{SlF(SlHeaderX)}\" y1=\"{SlF(ly)}\" x2=\"{SlF(svgW - SlTailPad)}\" y2=\"{SlF(ly)}\" stroke=\"rgba(100,120,150,0.15)\" stroke-width=\"1\" stroke-dasharray=\"5 5\"/>"); }
+
+        // Node X positions
+        var nodeX = new Dictionary<string, double>();
+        for (int i = 0; i < sorted.Count; i++) nodeX[sorted[i].Key] = startX + i * (SlNodeW + SlNodeGap);
+
+        // Forward arrows per level
+        for (int lv = 0; lv < visLevels; lv++)
+        { bool isExpress = lv > 0; double ay = SlLevelY(lv, svgH) + SlNodeH / 2.0; double fromX = SlHeaderX + SlSentinelW;
+          foreach (var item in sorted)
+          { int h = st.SlNodeLevels.TryGetValue(item.Key, out var lh) ? lh : 1; if (h <= lv) continue;
+            double toX = nodeX[item.Key]; string mid = isExpress ? "sl-arrow-exp" : "sl-arrow"; string stroke = isExpress ? "#339966" : "#8899aa"; double sw = isExpress ? 2.0 : 1.4; double op = 0.6;
+            sb.Append($"<line x1=\"{SlF(fromX)}\" y1=\"{SlF(ay)}\" x2=\"{SlF(toX - 5)}\" y2=\"{SlF(ay)}\" stroke=\"{stroke}\" stroke-width=\"{SlF(sw)}\" opacity=\"{SlF(op)}\" marker-end=\"url(#{mid})\"/>"); fromX = toX + SlNodeW; }
+          double tailX = svgW - SlTailPad; string tArrow = isExpress ? "sl-arrow-exp" : "sl-arrow"; string tStroke = isExpress ? "#339966" : "#8899aa";
+          sb.Append($"<line x1=\"{SlF(fromX)}\" y1=\"{SlF(ay)}\" x2=\"{SlF(tailX - 5)}\" y2=\"{SlF(ay)}\" stroke=\"{tStroke}\" stroke-width=\"{(isExpress ? "1.4" : "1.0")}\" opacity=\"0.35\" marker-end=\"url(#{tArrow})\"/>"); }
+
+        // Header sentinel
+        sb.Append($"<rect x=\"{SlF(SlHeaderX)}\" y=\"{SlF(sentinelY)}\" width=\"{SlF(SlSentinelW)}\" height=\"{SlF(sentinelTotalH)}\" rx=\"4\" fill=\"#f0eef8\" stroke=\"#9977bb\" stroke-width=\"1.2\" opacity=\"0.9\"/>");
+        sb.Append(SlT(SlHeaderX + SlSentinelW / 2, sentinelY + sentinelTotalH / 2 + 5, "−∞", 14, "#6644aa"));
+
+        // Tail sentinel
+        double tailSentX = svgW - SlTailPad;
+        sb.Append($"<rect x=\"{SlF(tailSentX)}\" y=\"{SlF(sentinelY)}\" width=\"{SlF(SlSentinelW)}\" height=\"{SlF(sentinelTotalH)}\" rx=\"4\" fill=\"#f0eef8\" stroke=\"#9977bb\" stroke-width=\"1.2\" opacity=\"0.9\"/>");
+        sb.Append(SlT(tailSentX + SlSentinelW / 2, sentinelY + sentinelTotalH / 2 + 5, "+∞", 14, "#6644aa"));
+
+        // Nodes
+        foreach (var item in sorted)
+        { double nx = nodeX[item.Key]; int height = st.SlNodeLevels.TryGetValue(item.Key, out var nh) ? Math.Min(nh, visLevels) : 1;
+          if (height > 1) { double topY = SlLevelY(height - 1, svgH), btY = SlLevelY(0, svgH) + SlNodeH; sb.Append($"<line x1=\"{SlF(nx + SlNodeW / 2)}\" y1=\"{SlF(topY)}\" x2=\"{SlF(nx + SlNodeW / 2)}\" y2=\"{SlF(btY)}\" stroke=\"rgba(50,130,80,0.35)\" stroke-width=\"2\" stroke-dasharray=\"3 2\"/>"); }
+          for (int lv = 0; lv < height; lv++)
+          { double by = SlLevelY(lv, svgH); bool isExpress = lv > 0;
+            string fill = isExpress ? "#eef7ee" : "#eef2f7"; string stroke = isExpress ? "#339966" : "#8899aa"; double sw = isExpress ? 1.4 : 1.0;
+            sb.Append($"<rect x=\"{SlF(nx)}\" y=\"{SlF(by)}\" width=\"{SlF(SlNodeW)}\" height=\"{SlF(SlNodeH)}\" rx=\"5\" fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{SlF(sw)}\"/>");
+            if (lv == 0)
+            { sb.Append(SlT(nx + SlNodeW / 2, by + 15, Trunc(item.Key, 9),   11, "#111111", "middle", "600")); sb.Append(SlT(nx + SlNodeW / 2, by + SlNodeH - 7, Trunc(item.Value, 9), 9, "#556677")); }
+            else
+            { sb.Append(SlT(nx + SlNodeW / 2, by + SlNodeH / 2 + 4, Trunc(item.Key, 9), 10, "#226644", "middle", "600")); sb.Append(SlT(nx + SlNodeW - 4, by + 9, $"L{lv}", 7, "#339966", "end")); } } }
+
+        sb.Append("</svg></div>");
+        return sb.ToString();
+    }
+
+    // ══ Rendering dispatch ════════════════════════════════════════════════════
+
+    private RenderFragment RenderViz(string slug, StructureState st) => slug switch
+    {
+        "open-hashing"       => RenderChaining(st),
+        "linear-probing"     => RenderLpTable(st, st.LpSnap),
+        "quadratic-probing"  => RenderQpTable(st),
+        "double-hashing"     => RenderDhTable(st),
+        "robin-hood-hashing" => RenderRhTable(st),
+        "cuckoo-hashing"     => RenderCuckoo(st),
+        "perfect-hashing"    => RenderPerfectHash(st),
+        "avl-tree"           => RenderSvgMarkup(st.TreeSvg, "Дерево пустое"),
+        "red-black-tree"     => RenderSvgMarkup(st.TreeSvg, "Дерево пустое"),
+        "skip-list"          => RenderSvgMarkup(st.SlSvg,   "Список пуст"),
+        "cartesian-tree"     => RenderSvgMarkup(st.TreeSvg, "Дерево пустое"),
+        _                    => builder => { }
+    };
+
+    private RenderFragment RenderSvgMarkup(string markup, string emptyMsg) => builder =>
+    { if (string.IsNullOrEmpty(markup)) builder.AddMarkupContent(0, $"<div style='padding:12px;color:var(--text-3);font-family:var(--font-ui);font-size:11px;font-style:italic;'>{emptyMsg}</div>"); else builder.AddMarkupContent(0, markup); };
+
+    private RenderFragment RenderChaining(StructureState st) => builder =>
+    { int seq = 0;
+      if (st.ChainBuckets == null || st.ChainBuckets.Count == 0) { builder.AddMarkupContent(seq++, "<div style='padding:8px;color:var(--text-3);font-size:11px;font-style:italic;'>Таблица пуста</div>"); return; }
+      foreach (var b in st.ChainBuckets)
+      { builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", "cmp-chain-bucket");
+        builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-chain-idx"); builder.AddContent(seq++, $"[{b.Slot}]"); builder.CloseElement();
+        builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", "cmp-chain-items");
+        if (b.Chain.Count == 0) { builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-chain-empty"); builder.AddContent(seq++, "—"); builder.CloseElement(); }
+        else foreach (var item in b.Chain) { builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-chain-item"); builder.AddContent(seq++, $"{Trunc(item.Key,8)}→{Trunc(item.Value,8)}"); builder.CloseElement(); }
+        builder.CloseElement(); builder.CloseElement(); }
+      AppendLoadBar(builder, ref seq, st.LoadFactor, st.Count, st.Capacity); };
+
+    private RenderFragment RenderLpTable(StructureState st, LpSnapshot? snap) => builder =>
+    { int seq = 0;
+      if (snap == null || snap.Capacity == 0) { builder.AddMarkupContent(seq++, "<div style='padding:8px;color:var(--text-3);font-size:11px;'>Ожидание...</div>"); return; }
+      foreach (var slot in snap.Slots)
+      { string cls = slot.State switch { LpSlotState.Occupied => "lp-occ", LpSlotState.Deleted => "lp-del", _ => "lp-empty" };
+        builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", $"cmp-lp-slot {cls}");
+        builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-idx"); builder.AddContent(seq++, $"[{slot.Index}]"); builder.CloseElement();
+        builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-dot"); builder.AddContent(seq++, slot.State == LpSlotState.Occupied ? "●" : slot.State == LpSlotState.Deleted ? "✕" : "○"); builder.CloseElement();
+        if (slot.State == LpSlotState.Occupied) { builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-key"); builder.AddContent(seq++, Trunc(slot.Key, 9)); builder.CloseElement(); builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-sep"); builder.AddContent(seq++, "→"); builder.CloseElement(); builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-val"); builder.AddContent(seq++, Trunc(slot.Value, 9)); builder.CloseElement(); if (slot.HomeSlot >= 0 && slot.HomeSlot != slot.Index) { builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-home"); builder.AddContent(seq++, $"h={slot.HomeSlot}"); builder.CloseElement(); } }
+        else if (slot.State == LpSlotState.Deleted) { builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-sep"); builder.AddContent(seq++, "tombstone"); builder.CloseElement(); }
+        builder.CloseElement(); }
+      AppendLoadBar(builder, ref seq, snap.LoadFactor, snap.Count, snap.Capacity); };
+
+    private RenderFragment RenderQpTable(StructureState st) => builder =>
+    { int seq = 0; var snap = st.QpSnap;
+      if (snap == null || snap.Capacity == 0) { builder.AddMarkupContent(seq++, "<div style='padding:8px;color:var(--text-3);font-size:11px;'>Ожидание...</div>"); return; }
+      foreach (var slot in snap.Slots)
+      { string cls = slot.State switch { LpSlotState.Occupied => "lp-occ", LpSlotState.Deleted => "lp-del", _ => "lp-empty" };
+        builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", $"cmp-lp-slot {cls}");
+        builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-idx"); builder.AddContent(seq++, $"[{slot.Index}]"); builder.CloseElement();
+        builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-dot"); builder.AddContent(seq++, slot.State == LpSlotState.Occupied ? "●" : slot.State == LpSlotState.Deleted ? "✕" : "○"); builder.CloseElement();
+        if (slot.State == LpSlotState.Occupied) { builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-key"); builder.AddContent(seq++, Trunc(slot.Key, 9)); builder.CloseElement(); builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-sep"); builder.AddContent(seq++, "→"); builder.CloseElement(); builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-val"); builder.AddContent(seq++, Trunc(slot.Value, 9)); builder.CloseElement(); }
+        builder.CloseElement(); }
+      AppendLoadBar(builder, ref seq, snap.LoadFactor, snap.Count, snap.Capacity); };
+
+    private RenderFragment RenderDhTable(StructureState st) => builder =>
+    { int seq = 0; var tbl = st.DhTable; if (tbl == null) { builder.AddMarkupContent(seq++, "<div style='padding:8px;color:var(--text-3);font-size:11px;'>Ожидание...</div>"); return; }
+      for (int i = 0; i < tbl.Length; i++)
+      { var slot = tbl[i]; string cls = slot.State switch { DhState.Occupied => "lp-occ", DhState.Deleted => "lp-del", _ => "lp-empty" };
+        builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", $"cmp-lp-slot {cls}");
+        builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-idx"); builder.AddContent(seq++, $"[{i}]"); builder.CloseElement();
+        builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-dot"); builder.AddContent(seq++, slot.State == DhState.Occupied ? "●" : slot.State == DhState.Deleted ? "✕" : "○"); builder.CloseElement();
+        if (slot.State == DhState.Occupied) { builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-key"); builder.AddContent(seq++, Trunc(slot.Key, 9)); builder.CloseElement(); builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-sep"); builder.AddContent(seq++, "→"); builder.CloseElement(); builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-val"); builder.AddContent(seq++, Trunc(slot.Value, 9)); builder.CloseElement(); if (slot.HomeSlot >= 0 && slot.HomeSlot != i) { builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-home"); builder.AddContent(seq++, $"h₁={slot.HomeSlot}"); builder.CloseElement(); } }
+        else if (slot.State == DhState.Deleted) { builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-sep"); builder.AddContent(seq++, "tombstone"); builder.CloseElement(); }
+        builder.CloseElement(); }
+      AppendLoadBar(builder, ref seq, st.LoadFactor, st.Count, st.Capacity); };
+
+    private RenderFragment RenderRhTable(StructureState st) => builder =>
+    { int seq = 0; var tbl = st.RhTable; if (tbl == null) { builder.AddMarkupContent(seq++, "<div style='padding:8px;color:var(--text-3);font-size:11px;'>Ожидание...</div>"); return; }
+      for (int i = 0; i < tbl.Length; i++)
+      { var slot = tbl[i]; string cls = slot.State == RhState.Occupied ? "lp-occ" : "lp-empty";
+        builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", $"cmp-lp-slot {cls}");
+        builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-idx"); builder.AddContent(seq++, $"[{i}]"); builder.CloseElement();
+        builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-dot"); builder.AddContent(seq++, slot.State == RhState.Occupied ? "●" : "○"); builder.CloseElement();
+        if (slot.State == RhState.Occupied) { builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-key"); builder.AddContent(seq++, Trunc(slot.Key, 9)); builder.CloseElement(); builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-sep"); builder.AddContent(seq++, "→"); builder.CloseElement(); builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-val"); builder.AddContent(seq++, Trunc(slot.Value, 9)); builder.CloseElement(); builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-home"); builder.AddContent(seq++, $"psl={slot.Psl}"); builder.CloseElement(); }
+        builder.CloseElement(); }
+      AppendLoadBar(builder, ref seq, st.LoadFactor, st.Count, st.Capacity); };
+
+    private RenderFragment RenderCuckoo(StructureState st) => builder =>
+    { int seq = 0;
+      if (st.CkT1.Count == 0) { builder.AddMarkupContent(seq++, "<div style='padding:8px;color:var(--text-3);font-size:11px;font-style:italic;'>Таблица пуста</div>"); return; }
+      void RenderCkTable(string label, List<CkSlotForViz> slots, string extraCls)
+      { builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", "cmp-ck-table");
+        builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", "cmp-ck-label"); builder.AddContent(seq++, label); builder.CloseElement();
+        builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", "cmp-ck-slots");
+        foreach (var s in slots)
+        { string cls = $"cmp-ck-slot {extraCls} {(s.Occupied ? "" : "ck-empty")}".Trim();
+          builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", cls);
+          builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", "cmp-ck-idx"); builder.AddContent(seq++, $"[{s.Idx}]"); builder.CloseElement();
+          if (s.Occupied) { builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", "cmp-ck-key"); builder.AddContent(seq++, Trunc(s.Key, 7)); builder.CloseElement(); builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", "cmp-ck-val"); builder.AddContent(seq++, Trunc(s.Value, 7)); builder.CloseElement(); }
+          builder.CloseElement(); }
+        builder.CloseElement(); builder.CloseElement(); }
+      RenderCkTable("T1 — h1(key) = djb2·fnv1a mod cap", st.CkT1, "");
+      RenderCkTable("T2 — h2(key) = fnv1a·mix mod cap",  st.CkT2, "ck-t2");
+      AppendLoadBar(builder, ref seq, st.LoadFactor, st.Count, st.Capacity); };
+
+    private RenderFragment RenderPerfectHash(StructureState st) => builder =>
+    { int seq = 0;
+      if (!st.PhBuilt || (st.PhItems?.Count ?? 0) == 0) { builder.AddMarkupContent(seq++, "<div class='cmp-ph-note'>Пустой словарь. Добавьте элементы — таблица пересоберётся автоматически.</div>"); return; }
+      builder.AddMarkupContent(seq++, $"<div class='cmp-ph-note'>FKS perfect hash · {st.PhItems!.Count} ключей · 0 коллизий · поиск O(1) worst</div>");
+      foreach (var item in st.PhItems!)
+      { builder.OpenElement(seq++, "div"); builder.AddAttribute(seq++, "class", "cmp-ph-item");
+        builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-key"); builder.AddContent(seq++, Trunc(item.Key, 12)); builder.CloseElement();
+        builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-sep"); builder.AddContent(seq++, "→"); builder.CloseElement();
+        builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "class", "cmp-lp-val"); builder.AddContent(seq++, Trunc(item.Value, 12)); builder.CloseElement();
+        builder.CloseElement(); } };
+
+    private static void AppendLoadBar(RenderTreeBuilder b, ref int seq, double lf, int count, int cap)
+    { string fc = lf > 0.85 ? "crit" : lf > 0.65 ? "warn" : ""; double pct = Math.Min(lf * 100, 100);
+      b.OpenElement(seq++, "div"); b.AddAttribute(seq++, "class", "cmp-load-bar-wrap");
+      b.OpenElement(seq++, "div"); b.AddAttribute(seq++, "class", "cmp-load-bar-bg");
+      b.OpenElement(seq++, "div"); b.AddAttribute(seq++, "class", $"cmp-load-bar-fill {fc}"); b.AddAttribute(seq++, "style", $"width:{pct:F0}%"); b.CloseElement();
+      b.CloseElement();
+      b.OpenElement(seq++, "span"); b.AddAttribute(seq++, "class", "cmp-load-val"); b.AddContent(seq++, $"α={lf:F2} ({count}/{cap})"); b.CloseElement();
+      b.CloseElement(); }
+
+    // ══ Helpers ════════════════════════════════════════════════════════════════
+
+    private static string F(double v) => v.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+    private static string Trunc(string s, int max) => s.Length <= max ? s : s[..max] + "…";
+    private static string Enc(string s) => System.Net.WebUtility.HtmlEncode(s);
+
+    private static int NextPrime(int n)
+    { if (n < 2) return 2; for (int c = n; ; c++) { bool ok = true; for (int d = 2; d * d <= c; d++) if (c % d == 0) { ok = false; break; } if (ok) return c; } }
+
+    private void SetGlobalStatus(string msg, string cls, string icon)
+    { _globalStatus = msg; _globalStatusCls = cls; _globalStatusIcon = icon; }
+
+    private static void AddLog(StructureState st, string text, string cls)
+    { if (st.Log.Count > 30) st.Log.RemoveAt(0); st.Log.Add(new LogLine(text, cls)); }
+
+    private static string ComplexityColorCls(string c) =>
+        c.Contains("O(1)")   ? "ct-mono-o1"   :
+        c.Contains("O(log")  ? "ct-mono-olog" :
+        c.Contains("O(n)")   ? "ct-mono-on"   :
+        c.Contains("N/A")    ? "ct-mono-na"   : "ct-mono";
 }
