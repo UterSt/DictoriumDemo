@@ -1629,3 +1629,137 @@ table { border-spacing: 0; }
   color: #fff;
   border-color: var(--bg-nav);
 }
+
+/* ── Support banner ─────────────────────────────────────────────── */
+.support-banner {
+  background: var(--bg-nav);
+  color: #ddeeff;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  padding: 6px 18px;
+  border-bottom: 2px solid #b8860b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.support-banner:hover {
+  background: #142e5a;
+  color: #ffffff;
+}
+.support-banner-star {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.support-banner-cta {
+  margin-left: auto;
+  background: #b8860b;
+  color: #ffffff;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 10px;
+  border: 1px outset #d4a017;
+}
+
+/* ── Support modal ──────────────────────────────────────────────── */
+.support-modal {
+  background: var(--bg);
+  border: 2px solid var(--bg-nav);
+  border-top: 4px solid #b8860b;
+  width: 100%;
+  max-width: 600px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  position: relative;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.support-modal-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.support-modal-desc {
+  color: var(--text-2);
+  font-family: var(--font-serif);
+  font-size: 13px;
+  margin: 0;
+  line-height: 1.55;
+}
+
+/* карточка репозитория: белый фон с синей левой полосой — как в остальном UI */
+.support-repo-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--bg-nav);
+  padding: 13px 16px;
+}
+.support-repo-card:hover {
+  border-left-color: #b8860b;
+  background: var(--bg-row);
+}
+.support-repo-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  width: 28px;
+  text-align: center;
+  color: var(--bg-nav);
+  opacity: 0.7;
+}
+.support-repo-info {
+  flex: 1;
+  min-width: 0;
+}
+.support-repo-name {
+  font-family: var(--font-ui);
+  font-weight: bold;
+  color: var(--text);
+  font-size: 13px;
+  margin-bottom: 3px;
+}
+.support-repo-desc {
+  color: var(--text-2);
+  font-family: var(--font-serif);
+  font-size: 12px;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+.support-repo-url {
+  color: var(--link);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+/* кнопка «Поставить звезду» — в стиле btn-hero-primary сайта */
+.support-star-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-nav);
+  border: 2px outset #3a5a9e;
+  color: #ffffff;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: bold;
+  padding: 8px 16px;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: 0.2px;
+}
+.support-star-btn:hover {
+  background: var(--bg-subnav);
+  border-style: inset;
+  color: #ffffff;
+  text-decoration: none;
+}
+.support-star-btn:visited {
+  color: #ffffff;
+}
