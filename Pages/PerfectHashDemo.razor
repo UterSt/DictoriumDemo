@@ -20,14 +20,14 @@
         <h1 class="struct-h1">Совершенное хеширование</h1>
         <div class="struct-en">PerfectHashDictionary.h · O(1) worst-case · двухуровневое хеширование FKS</div>
         <p class="struct-description">
-            Статическая хэш-таблица без коллизий. Построение (Build) — <strong>O(n^1.5)</strong> один раз.
+            Статическая хэш-таблица без коллизий. Построение (Build) — <strong>O(n)</strong> один раз.
             Поиск — строго <strong>O(1) / Ω(1)</strong>: ровно 2 вычисления хэша и 1 обращение к памяти.
             Операции вызывают реальный <code>dtr::PerfectHashDictionary</code>, скомпилированный в WebAssembly.
         </p>
         <div class="struct-tags">
             <span class="s-tag">ContainsKey O(1) worst</span>
             <span class="s-tag">TryGetValidatedValue O(1)</span>
-            <span class="s-tag">Build O(n^1.5)</span>
+            <span class="s-tag">Build O(n)</span>
             <span class="s-tag">Коллизий: 0</span>
             @if (_wasmReady)
             {
@@ -266,7 +266,7 @@
         if (_handle >= 0) await Dtr.PhFreeAsync(_handle);
 
         Log($"> PerfectHashDictionary(vector<pair> × {pairs.Count})", "log-op");
-        Log($"  Построение... O(n^1.5) — случайный подбор seeds...", "log-miss");
+        Log($"  Построение... O(n) — случайный подбор seeds...", "log-miss");
 
         _handle = await Dtr.PhCreateAsync(pairs);
 
